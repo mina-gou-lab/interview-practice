@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="アパレル販売職を目指す方向けの、一人でできる面談練習サイトです。スマートフォンで5〜10分、話し方のポイント確認から模擬質問への回答まで練習できます。">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👗</text></svg>">
+<title>アパレル面談練習</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-a: #F3F1EA;
+    --bg-b: #EFF6F1;
+    --card: #FFFFFF;
+    --teal-50: #E1F5EE;
+    --teal-100: #9FE1CB;
+    --teal-600: #0F6E56;
+    --teal-900: #04342C;
+    --coral-100: #FBD9C9;
+    --coral-300: #F0997B;
+    --coral-800: #4A1B0C;
+    --text: #2C2C2A;
+    --text-muted: #78766D;
+    --border: #E4E1D8;
+    --error-bg: #FDECEA;
+    --error-text: #7A271A;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body{ height:100%; }
+  body{
+    margin:0; color:var(--text);
+    font-family:"Noto Sans JP", sans-serif;
+    display:flex; justify-content:center; align-items:flex-start;
+    padding:28px 14px calc(28px + env(safe-area-inset-bottom));
+    min-height:100vh;
+    background: radial-gradient(circle at 20% 0%, var(--bg-b), var(--bg-a) 70%);
+  }
+  .phone{
+    width:100%; max-width:400px; background:var(--card);
+    border-radius:32px; border:1px solid var(--border);
+    padding:22px 20px calc(22px + env(safe-area-inset-bottom));
+    box-shadow: 0 10px 30px rgba(45,60,50,0.08);
+  }
+  .accent-bar{ height:6px; width:64px; border-radius:999px; margin:0 auto 18px;
+    background:linear-gradient(90deg, var(--teal-100), var(--coral-300)); }
+  .logo-mark{
+    width:56px; height:56px; border-radius:18px; margin:0 auto 14px;
+    background:linear-gradient(135deg, var(--teal-100), var(--coral-100));
+    display:flex; align-items:center; justify-content:center; font-size:28px;
+    box-shadow: 0 8px 18px rgba(159,225,203,0.4);
+  }
+  h1{ font-size:21px; font-weight:800; margin:0 0 6px; text-align:center; }
+  h2{ font-size:17px; font-weight:800; margin:0 0 16px; text-align:center;}
+  p{ line-height:1.7; margin:0 0 12px; }
+  .muted{ color:var(--text-muted); font-size:13px; }
+  .center{ text-align:center; }
+  .btn{
+    font-family:inherit; font-size:15px; font-weight:600;
+    border:1.5px solid var(--border); background:#fff; color:var(--text);
+    border-radius:999px; padding:13px 18px; cursor:pointer;
+    width:100%; min-height:48px; touch-action:manipulation;
+    transition:transform .08s ease, background .15s ease, border-color .15s ease;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn:hover{ background:#FAFAF7; }
+  .btn-primary{
+    background:linear-gradient(135deg, var(--teal-100), #8fd8bf); color:var(--teal-900); border:none; font-weight:700;
+    box-shadow:0 8px 16px rgba(159,225,203,0.45);
+  }
+  .btn-primary:hover{ filter:brightness(0.98); }
+  .btn-ghost{ background:transparent; border:none; color:var(--teal-900); text-align:left; padding-left:0; width:auto; min-height:auto; }
+  .btn-danger{ background:transparent; border:none; color:#B23B22; font-size:12px; text-decoration:underline; width:auto; min-height:auto; padding:4px 0;}
+  .note-box{
+    background:var(--teal-50); color:var(--teal-900); font-size:12px;
+    padding:10px 12px; border-radius:14px; margin-bottom:16px; line-height:1.6;
+  }
+  .warn-box{
+    background:#FFF6E5; color:#6B4E00; font-size:12px;
+    padding:10px 12px; border-radius:14px; margin-bottom:16px; line-height:1.6;
+  }
+  .error-banner{
+    background:var(--error-bg); color:var(--error-text); font-size:12px;
+    padding:10px 12px; border-radius:12px; margin-top:10px; line-height:1.6;
+  }
+  .tip-row{ display:flex; align-items:center; gap:12px; background:var(--teal-50);
+    border-radius:16px; padding:14px; margin-bottom:10px; }
+  .tip-icon{ width:38px; height:38px; min-width:38px; border-radius:50%; background:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:17px; }
+  .tip-text{ font-size:14px; font-weight:600; margin:0; }
+  .progress-wrap{ margin-bottom:18px; }
+  .progress-label{ display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:6px; font-weight:600; }
+  .progress-bar{ height:9px; background:var(--border); border-radius:999px; overflow:hidden; }
+  .progress-fill{ height:100%; background:linear-gradient(90deg, var(--teal-100), var(--coral-300)); border-radius:999px; transition:width .3s ease; }
+  .q-text{ font-size:18px; font-weight:800; line-height:1.6; margin:0 0 14px; }
+  textarea{
+    width:100%; min-height:90px; font-family:inherit; font-size:16px;
+    border:1.5px solid var(--border); border-radius:14px; padding:12px 13px; resize:vertical;
+  }
+  textarea:focus, .btn:focus-visible, input:focus-visible{ outline:2px solid var(--teal-100); outline-offset:1px; }
+  .divider{ border:none; border-top:1px solid var(--border); margin:18px 0; }
+  .example-box{ background:var(--teal-50); border-radius:14px; padding:13px 15px; margin-top:10px; }
+  .example-box p{ margin:0; font-size:13px; line-height:1.7; color:var(--teal-900); }
+  .mic-area{ text-align:center; padding:16px 0 6px; }
+  .mic-btn{
+    width:68px; height:68px; border-radius:50%; border:none; cursor:pointer;
+    background:linear-gradient(135deg, var(--teal-100), #8fd8bf); color:var(--teal-900); font-size:24px; margin-bottom:10px;
+    box-shadow:0 8px 16px rgba(159,225,203,0.45); min-height:auto;
+  }
+  .mic-btn.recording{ background:linear-gradient(135deg, var(--coral-300), #e8815f); color:#fff; box-shadow:0 8px 16px rgba(240,153,123,0.45); }
+  .q-card{ background:var(--teal-50); border-radius:16px; padding:13px 15px; margin-bottom:10px; }
+  .q-label{ font-size:12px; color:var(--text-muted); margin:0 0 6px; font-weight:600; }
+  .answer-text{ font-size:13px; line-height:1.7; margin:0; }
+  audio{ width:100%; height:34px; margin-top:6px; }
+  .history-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 0; border-bottom:1px solid var(--border);
+  }
+  .history-row p{ margin:0; }
+  .history-date{ font-size:13px; font-weight:700; }
+  .history-meta{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+  .empty-state{ text-align:center; padding:24px 0; color:var(--text-muted); font-size:13px; }
+  .speech-row{ display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .stack{ display:flex; flex-direction:column; gap:10px; }
+</style>
+</head>
+<body>
+<div class="phone" id="app"></div>
+
+<script>
+/* =========================================================
+   機能サポート判定(未対応ブラウザ・エラー対応のため)
+========================================================= */
+const SUPPORT = {
+  mediaRecorder: !!(navigator.mediaDevices && window.MediaRecorder),
+  speechRecognition: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+  localStorage: (() => {
+    try{
+      const k = "__storage_test__";
+      localStorage.setItem(k, "1");
+      localStorage.removeItem(k);
+      return true;
+    }catch(e){ return false; }
+  })()
+};
+
+/* =========================================================
+   質問データ
+========================================================= */
+const DATA = {
+  speakingTips: [
+    { icon:"🗣", text:"いつもよりゆっくり話しましょう" },
+    { icon:"😊", text:"笑顔を意識しましょう" },
+    { icon:"❓", text:"わからない時は聞き返しても大丈夫です" },
+    { icon:"💬", text:"結論から、簡潔に伝えましょう" }
+  ],
+  questions: [
+    { id:"q1", text:"自己紹介をお願いします。", tip:"名前・簡単な経歴・意欲、の3つだけでOK",
+      answers:{ standard:"〇〇と申します。前職ではアパレルショップで3年間、接客の仕事をしていました。お客様と話すことが好きで、この仕事を続けたいと思い応募しました。よろしくお願いします。" } },
+    { id:"q2", text:"志望理由を教えてください。", tip:"なぜアパレル業界・この会社なのか、きっかけを一つ",
+      answers:{ standard:"以前からファッションが好きで、お客様に似合う商品を提案する仕事に興味がありました。御社の商品が好きで、ここで働きたいと思いました。" } },
+    { id:"q3", text:"あなたの強みは何ですか。", tip:"強み+それがわかる小さなエピソード",
+      answers:{ standard:"私の強みは、明るく人と話せることです。前の仕事でも、お客様から「感じがいいね」とよく言っていただきました。" } },
+    { id:"q4", text:"接客で大切にしていることは何ですか。", tip:"お客様への気持ち・態度を一つ挙げる",
+      answers:{ standard:"お客様の気持ちを考えて、笑顔で対応することを大切にしています。それぞれのお客様のペースにあわせてお話を聞くようにしています。" } },
+    { id:"q5", text:"最後に質問はありますか。", tip:"逆質問は意欲を見せるチャンス。1つ用意しておく",
+      answers:{ standard:"はい。入社した後、研修はありますか。もしあれば、どのような内容か教えていただきたいです。" } }
+  ]
+};
+
+/* =========================================================
+   設定
+   ------------------------------------------------------
+   cloudEnabled: 将来Supabase等でクラウド保存・管理者閲覧を
+   実装したら true に切り替える。true にすると、求職者向けの
+   説明文が「担当者が確認する場合があります」に自動的に変わる。
+   (実際に閲覧できるようになる前に true にしないこと)
+========================================================= */
+const CONFIG = {
+  cloudEnabled: false
+};
+
+function getPrivacyNoticeText(){
+  return CONFIG.cloudEnabled
+    ? "入力内容は、面談準備のサポートを目的として、担当者が確認する場合があります。"
+    : "この練習内容は、この端末にのみ保存されます。他の人には共有されません。";
+}
+
+function getSavedConfirmationText(){
+  return CONFIG.cloudEnabled
+    ? "この記録はクラウドに保存されました。担当者が内容を確認できます。トップ画面の「過去の練習を見る」からも、いつでも見返せます。"
+    : "この記録はブラウザに保存されました。トップ画面の「過去の練習を見る」からいつでも見返せます。";
+}
+
+/* =========================================================
+   求職者ごとの専用URL対応
+   ------------------------------------------------------
+   ?id=XXXX の形でアクセスされた場合、そのIDを使う。
+   なければ、この端末用のIDを自動生成して使い続ける。
+   このIDは、将来Supabaseに移行したときの
+   「どの求職者の回答か」を結びつけるキーとしてそのまま使う想定。
+========================================================= */
+function getSessionId(){
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = params.get("id");
+  if(fromUrl){
+    try{ localStorage.setItem("apparel_interview_last_id", fromUrl); }catch(e){}
+    return fromUrl;
+  }
+  try{
+    const saved = localStorage.getItem("apparel_interview_last_id");
+    if(saved) return saved;
+  }catch(e){}
+  const generated = (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : "local_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+  try{ localStorage.setItem("apparel_interview_last_id", generated); }catch(e){}
+  return generated;
+}
+const SESSION_ID = getSessionId();
+
+/* =========================================================
+   Storage抽象化レイヤー
+   ------------------------------------------------------
+   UI側は list / save / remove / saveDraft / loadDraft / clearDraft
+   という関数だけを使います。将来クラウド保存(Supabaseなど)や
+   管理者ログインを追加する際は、この中身をSESSION_IDをキーにした
+   API呼び出しに差し替えるだけで済むように設計しています。
+========================================================= */
+const SESSIONS_KEY = `apparel_interview_sessions_v1__${SESSION_ID}`;
+const DRAFT_KEY = `apparel_interview_draft_v1__${SESSION_ID}`;
+const MAX_SESSIONS = 8;
+
+const Storage = {
+  async list(){
+    if(!SUPPORT.localStorage) return [];
+    try{
+      const raw = localStorage.getItem(SESSIONS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ console.error("Storage.list failed", e); return []; }
+  },
+  async save(session){
+    if(!SUPPORT.localStorage) return false;
+    try{
+      const sessions = await Storage.list();
+      sessions.unshift(session);
+      while(sessions.length > MAX_SESSIONS) sessions.pop();
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+      return true;
+    }catch(e){
+      console.error("Storage.save failed, retrying smaller", e);
+      try{
+        const sessions = await Storage.list();
+        sessions.unshift(session);
+        sessions.length = Math.max(1, sessions.length - 2);
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+        return true;
+      }catch(e2){ console.error("Storage.save failed again", e2); return false; }
+    }
+  },
+  async remove(sessionId){
+    if(!SUPPORT.localStorage) return;
+    const sessions = await Storage.list();
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.filter(s => s.id !== sessionId)));
+  },
+  async saveDraft(draft){
+    if(!SUPPORT.localStorage) return false;
+    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); return true; }
+    catch(e){ console.error("saveDraft failed", e); return false; }
+  },
+  async loadDraft(){
+    if(!SUPPORT.localStorage) return null;
+    try{
+      const raw = localStorage.getItem(DRAFT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  },
+  async clearDraft(){
+    if(!SUPPORT.localStorage) return;
+    try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+  }
+};
+
+function blobToDataURL(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function debounce(fn, delay){
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
+}
+
+/* =========================================================
+   アプリの状態
+========================================================= */
+let state = {
+  screen: "top",        // top | tips | practice | review | history | historyDetail
+  qIndex: 0,
+  showExample: false,
+  inputMode: "text",    // text | voice
+  answers: [],           // {mode:'text', text} | {mode:'voice', audioDataUrl}
+  recorder: null,
+  recording: false,
+  hasHistory: false,
+  hasDraft: false,
+  lastSavedNotice: false,
+  viewingSessionId: null
+};
+
+let recognitionInstance = null; // Web Speech APIのインスタンス(画面外で保持)
+
+const app = document.getElementById("app");
+
+function setState(patch){
+  stopSpeechIfActive();
+  state = { ...state, ...patch };
+  render();
+}
+
+function stopSpeechIfActive(){
+  if(recognitionInstance){
+    try{ recognitionInstance.stop(); }catch(e){}
+    recognitionInstance = null;
+  }
+}
+
+async function refreshFlags(){
+  const [sessions, draft] = await Promise.all([Storage.list(), Storage.loadDraft()]);
+  state.hasHistory = sessions.length > 0;
+  state.hasDraft = !!(draft && draft.answers && (draft.answers.some(a => a) || draft.qIndex > 0));
+}
+
+function render(){
+  if(state.screen === "top") return renderTop();
+  if(state.screen === "tips") return renderTips();
+  if(state.screen === "practice") return renderPractice();
+  if(state.screen === "review") return renderReview();
+  if(state.screen === "history") return renderHistory();
+  if(state.screen === "historyDetail") return renderHistoryDetail();
+}
+
+/* ------------------------- トップ画面 ------------------------- */
+function renderTop(){
+  app.innerHTML = `
+    <div class="accent-bar"></div>
+    <div class="logo-mark">👗</div>
+    <h1>アパレル面談練習</h1>
+    <p class="muted center" style="margin-bottom:14px;">5〜10分で、一人で面談の練習ができます。</p>
+    <div class="note-box">${getPrivacyNoticeText()}</div>
+    ${!SUPPORT.localStorage ? `<div class="warn-box">この端末では自動保存が利用できない可能性があります(プライベートブラウズモードなど)。練習内容は、ページを閉じると失われる場合があります。</div>` : ""}
+    <div class="stack">
+      ${state.hasDraft ? `<button class="btn btn-primary" id="resume-btn">前回の続きから練習 ↗</button>` : ""}
+      <button class="btn ${state.hasDraft ? "" : "btn-primary"}" id="start-btn">${state.hasDraft ? "新しく練習をはじめる" : "面談練習をはじめる ↗"}</button>
+      ${state.hasHistory ? `<button class="btn" id="history-btn">過去の練習を見る</button>` : ""}
+    </div>
+  `;
+  const resumeBtn = document.getElementById("resume-btn");
+  if(resumeBtn){
+    resumeBtn.onclick = async () => {
+      const draft = await Storage.loadDraft();
+      if(!draft){ setState({ screen:"tips" }); return; }
+      setState({
+        screen:"practice", qIndex: draft.qIndex || 0, answers: draft.answers || [],
+        inputMode:"text", showExample:false
+      });
+    };
+  }
+  document.getElementById("start-btn").onclick = async () => {
+    await Storage.clearDraft();
+    setState({ screen:"tips", qIndex:0, answers:[], showExample:false, inputMode:"text" });
+  };
+  const historyBtn = document.getElementById("history-btn");
+  if(historyBtn) historyBtn.onclick = () => setState({ screen:"history" });
+}
+
+/* ------------------------- 話し方のポイント ------------------------- */
+function renderTips(){
+  app.innerHTML = `
+    <h2>話し方のポイント</h2>
+    ${DATA.speakingTips.map(t => `
+      <div class="tip-row">
+        <div class="tip-icon">${t.icon}</div>
+        <p class="tip-text">${t.text}</p>
+      </div>
+    `).join("")}
+    <div style="height:8px;"></div>
+    <button class="btn btn-primary" id="tips-next">わかった、練習をはじめる ↗</button>
+  `;
+  document.getElementById("tips-next").onclick = () => setState({ screen:"practice" });
+}
+
+/* ------------------------- 面談練習 ------------------------- */
+function currentAnswer(){ return state.answers[state.qIndex] || null; }
+
+function renderPractice(){
+  const q = DATA.questions[state.qIndex];
+  const total = DATA.questions.length;
+  const ans = currentAnswer();
+  const pct = Math.round(((state.qIndex + 1) / total) * 100);
+
+  app.innerHTML = `
+    <div class="progress-wrap">
+      <div class="progress-label"><span>進捗</span><span>${state.qIndex+1} / ${total}</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;"></div></div>
+    </div>
+
+    <p class="q-text">${q.text}</p>
+    <p class="muted" style="margin-top:-8px; margin-bottom:14px;">ヒント: ${q.tip}</p>
+
+    <div id="input-area"></div>
+
+    <div style="display:flex; gap:8px; margin:14px 0 4px;">
+      <button class="btn" id="mode-text" style="${state.inputMode==='text' ? 'border-color:var(--teal-600);' : ''}">文字で回答</button>
+      <button class="btn" id="mode-voice" style="${state.inputMode==='voice' ? 'border-color:var(--teal-600);' : ''}">声で回答(録音)</button>
+    </div>
+
+    <hr class="divider">
+
+    <button class="btn btn-ghost" id="toggle-example">${state.showExample ? "▲ 回答例を隠す" : "▼ 回答例を見る"}</button>
+    <div id="example-slot"></div>
+
+    <div style="height:18px;"></div>
+    <button class="btn btn-primary" id="next-btn">${state.qIndex === total-1 ? "終了して振り返りを見る" : "次の質問へ"}</button>
+  `;
+
+  renderInputArea(ans);
+
+  if(state.showExample){
+    document.getElementById("example-slot").innerHTML = `
+      <div class="example-box"><p>${q.answers.standard}</p></div>
+    `;
+  }
+
+  document.getElementById("mode-text").onclick = () => switchMode("text");
+  document.getElementById("mode-voice").onclick = () => switchMode("voice");
+  document.getElementById("toggle-example").onclick = () => setState({ showExample: !state.showExample });
+  document.getElementById("next-btn").onclick = onNext;
+}
+
+function switchMode(mode){
+  flushTextIfNeeded();
+  setState({ inputMode: mode });
+}
+
+function flushTextIfNeeded(){
+  if(state.inputMode === "text"){
+    const ta = document.getElementById("answer-text");
+    if(ta){
+      state.answers[state.qIndex] = { mode:"text", text: ta.value };
+      saveDraft();
+    }
+  }
+}
+
+function saveDraft(){
+  Storage.saveDraft({ qIndex: state.qIndex, answers: state.answers, updatedAt: new Date().toISOString() });
+}
+
+function renderInputArea(ans){
+  const slot = document.getElementById("input-area");
+
+  if(state.inputMode === "text"){
+    const val = ans && ans.mode === "text" ? ans.text : "";
+    slot.innerHTML = `
+      <textarea id="answer-text" placeholder="ここに回答を入力してください">${val || ""}</textarea>
+      <div class="speech-row">
+        ${SUPPORT.speechRecognition
+          ? `<button class="btn" id="speech-btn" style="width:auto; padding:9px 16px;">🎙️ 音声入力</button><span class="muted" id="speech-status"></span>`
+          : `<span class="muted">この端末・ブラウザでは音声入力に対応していません(文字を直接入力してください)</span>`}
+      </div>
+      <div id="input-error" class="error-banner" style="display:none;"></div>
+    `;
+    const textarea = document.getElementById("answer-text");
+    textarea.addEventListener("input", debounce(() => {
+      state.answers[state.qIndex] = { mode:"text", text: textarea.value };
+      saveDraft();
+    }, 500));
+    if(SUPPORT.speechRecognition){
+      document.getElementById("speech-btn").onclick = () => toggleSpeechInput(textarea);
+    }
+  } else {
+    if(!SUPPORT.mediaRecorder){
+      slot.innerHTML = `<div class="error-banner" style="display:block;">この端末・ブラウザでは音声録音に対応していません。お手数ですが「文字で回答」をお使いください。</div>`;
+      return;
+    }
+    const hasVoice = ans && ans.mode === "voice";
+    slot.innerHTML = `
+      <div class="mic-area">
+        <button class="btn mic-btn ${state.recording ? 'recording' : ''}" id="mic-btn">${state.recording ? "■" : "🎤"}</button>
+        <p class="muted" style="margin:0;">${state.recording ? "録音中…もう一度押すと停止します" : (hasVoice ? "録音済みです。再生して確認できます" : "押すと録音を開始します")}</p>
+        ${hasVoice ? `<audio controls src="${ans.audioDataUrl}"></audio>` : ""}
+      </div>
+      <div id="input-error" class="error-banner" style="display:none;"></div>
+    `;
+    document.getElementById("mic-btn").onclick = onMicClick;
+  }
+}
+
+function showInputError(msg){
+  const el = document.getElementById("input-error");
+  if(el){ el.textContent = msg; el.style.display = "block"; }
+}
+function clearInputError(){
+  const el = document.getElementById("input-error");
+  if(el){ el.style.display = "none"; el.textContent = ""; }
+}
+
+/* ---- 声で回答(録音してそのまま音声として保存) ---- */
+async function onMicClick(){
+  if(!state.recording){
+    clearInputError();
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        try{
+          const blob = new Blob(chunks, { type:"audio/webm" });
+          const audioDataUrl = await blobToDataURL(blob);
+          const answers = [...state.answers];
+          answers[state.qIndex] = { mode:"voice", audioDataUrl };
+          state.answers = answers;
+          saveDraft();
+          setState({ recording:false });
+        }catch(e){
+          setState({ recording:false });
+          showInputError("録音の保存に失敗しました。もう一度お試しください。");
+        }
+      };
+      recorder.start();
+      setState({ recorder, recording:true });
+    }catch(err){
+      showInputError("マイクを使用できませんでした。ブラウザの設定でマイクの利用を許可してください。「文字で回答」に切り替えることもできます。");
+    }
+  } else {
+    state.recorder.stop();
+  }
+}
+
+/* ---- 音声入力(Web Speech APIで文字に変換して入力欄へ反映) ---- */
+function toggleSpeechInput(textarea){
+  if(recognitionInstance){
+    recognitionInstance.stop();
+    return; // onendで後片付け
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SR();
+  recognition.lang = "ja-JP";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  let baseText = textarea.value ? textarea.value + " " : "";
+  clearInputError();
+
+  recognition.onresult = (e) => {
+    let interim = "", final = "";
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    if(final){
+      baseText += final;
+      state.answers[state.qIndex] = { mode:"text", text: baseText.trim() };
+      saveDraft();
+    }
+    textarea.value = (baseText + interim).trim();
+  };
+
+  recognition.onerror = (e) => {
+    const messages = {
+      "not-allowed": "マイクの使用が許可されませんでした。ブラウザの設定をご確認ください。",
+      "no-speech": "音声が検出されませんでした。もう一度お試しください。",
+      "network": "通信状態が原因でエラーが発生しました。"
+    };
+    showInputError(messages[e.error] || "音声入力でエラーが発生しました。文字で直接入力してください。");
+  };
+
+  recognition.onend = () => {
+    recognitionInstance = null;
+    const btn = document.getElementById("speech-btn");
+    const statusEl = document.getElementById("speech-status");
+    if(btn) btn.textContent = "🎙️ 音声入力";
+    if(statusEl) statusEl.textContent = "";
+  };
+
+  try{
+    recognition.start();
+    recognitionInstance = recognition;
+    const btn = document.getElementById("speech-btn");
+    const statusEl = document.getElementById("speech-status");
+    if(btn) btn.textContent = "■ 停止";
+    if(statusEl) statusEl.textContent = "聞き取り中…";
+  }catch(err){
+    showInputError("音声入力を開始できませんでした。文字で直接入力してください。");
+  }
+}
+
+function onNext(){
+  flushTextIfNeeded();
+  const total = DATA.questions.length;
+  if(state.qIndex === total - 1){
+    finishAndSave();
+  } else {
+    setState({ qIndex: state.qIndex + 1, showExample:false, inputMode:"text" });
+    saveDraft();
+  }
+}
+
+/* 練習終了時:完了済みセッションとして保存し、下書きは削除する */
+async function finishAndSave(){
+  const session = {
+    id: "sess_" + Date.now(),
+    createdAt: new Date().toISOString(),
+    answers: DATA.questions.map((q, i) => {
+      const a = state.answers[i];
+      return {
+        questionId: q.id,
+        questionText: q.text,
+        mode: a ? a.mode : null,
+        text: a && a.mode === "text" ? a.text : null,
+        audioDataUrl: a && a.mode === "voice" ? a.audioDataUrl : null
+      };
+    })
+  };
+  const saved = await Storage.save(session);
+  await Storage.clearDraft();
+  await refreshFlags();
+  setState({ screen:"review", lastSavedNotice: saved });
+}
+
+/* ------------------------- 振り返り(直後) ------------------------- */
+function renderReview(){
+  app.innerHTML = `
+    <h2>今日の練習 🎉</h2>
+    <p class="muted center" style="margin-top:-10px;">全 ${DATA.questions.length} 問・お疲れ様でした</p>
+    ${state.lastSavedNotice
+      ? `<div class="note-box">${getSavedConfirmationText()}</div>`
+      : `<div class="warn-box">保存に失敗しました(このセッション内でのみ確認できます)。</div>`}
+    ${DATA.questions.map((q,i) => {
+      const a = state.answers[i];
+      let body = `<p class="answer-text muted">(未回答)</p>`;
+      if(a && a.mode === "text"){
+        body = `<p class="answer-text">${a.text || "(未回答)"}</p>`;
+      } else if(a && a.mode === "voice"){
+        body = `<audio controls src="${a.audioDataUrl}"></audio>`;
+      }
+      return `<div class="q-card"><p class="q-label">${i+1}. ${q.text}</p>${body}</div>`;
+    }).join("")}
+    <div style="height:6px;"></div>
+    <div class="stack">
+      <button class="btn btn-primary" id="restart-btn">もう一度練習する</button>
+      <button class="btn" id="top-btn">トップ画面に戻る</button>
+    </div>
+  `;
+  document.getElementById("restart-btn").onclick = () => setState({
+    screen:"top", qIndex:0, answers:[], showExample:false, inputMode:"text", lastSavedNotice:false
+  });
+  document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false });
+}
+
+/* ------------------------- 過去の練習一覧 ------------------------- */
+async function renderHistory(){
+  const sessions = await Storage.list();
+  app.innerHTML = `
+    <h2>過去の練習</h2>
+    ${sessions.length === 0 ? `<p class="empty-state">まだ記録がありません</p>` : sessions.map(s => `
+      <div class="history-row">
+        <div>
+          <p class="history-date">${formatDate(s.createdAt)}</p>
+          <p class="history-meta">${countAnswered(s)} / ${DATA.questions.length} 問 回答</p>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+          <button class="btn" data-id="${s.id}" style="width:auto; padding:7px 15px; min-height:auto;">見る</button>
+          <button class="btn-danger" data-del="${s.id}">削除</button>
+        </div>
+      </div>
+    `).join("")}
+    <div style="height:16px;"></div>
+    <button class="btn" id="back-btn">トップ画面に戻る</button>
+  `;
+  app.querySelectorAll("[data-id]").forEach(btn => {
+    btn.onclick = () => setState({ screen:"historyDetail", viewingSessionId: btn.dataset.id });
+  });
+  app.querySelectorAll("[data-del]").forEach(btn => {
+    btn.onclick = async () => {
+      if(confirm("この記録を削除しますか?")){
+        await Storage.remove(btn.dataset.del);
+        await refreshFlags();
+        render();
+      }
+    };
+  });
+  document.getElementById("back-btn").onclick = () => setState({ screen:"top" });
+}
+
+function formatDate(iso){
+  const d = new Date(iso);
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+function countAnswered(session){
+  return session.answers.filter(a => a.mode === "text" || a.mode === "voice").length;
+}
+
+/* ------------------------- 過去の練習の詳細 ------------------------- */
+async function renderHistoryDetail(){
+  const sessions = await Storage.list();
+  const session = sessions.find(s => s.id === state.viewingSessionId);
+  if(!session){
+    app.innerHTML = `<p class="empty-state">記録が見つかりませんでした</p><button class="btn" id="back-btn">一覧に戻る</button>`;
+    document.getElementById("back-btn").onclick = () => setState({ screen:"history" });
+    return;
+  }
+  app.innerHTML = `
+    <h2>練習の記録</h2>
+    <p class="muted center" style="margin-top:-10px; margin-bottom:16px;">${formatDate(session.createdAt)}</p>
+    ${session.answers.map((a,i) => {
+      let body = `<p class="answer-text muted">(未回答)</p>`;
+      if(a.mode === "text"){
+        body = `<p class="answer-text">${a.text || "(未回答)"}</p>`;
+      } else if(a.mode === "voice" && a.audioDataUrl){
+        body = `<audio controls src="${a.audioDataUrl}"></audio>`;
+      }
+      return `<div class="q-card"><p class="q-label">${i+1}. ${a.questionText}</p>${body}</div>`;
+    }).join("")}
+    <div style="height:6px;"></div>
+    <button class="btn" id="back-btn">一覧に戻る</button>
+  `;
+  document.getElementById("back-btn").onclick = () => setState({ screen:"history" });
+}
+
+/* =========================================================
+   起動
+========================================================= */
+(async () => {
+  await refreshFlags();
+  render();
+})();
+</script>
+</body>
+</html>
