@@ -499,12 +499,15 @@ function toggleSpeechInput(textarea){
   };
 
   recognition.onerror = (e) => {
+    console.error("SpeechRecognition error", e.error, e);
     const messages = {
       "not-allowed": "マイクの使用が許可されませんでした。ブラウザの設定をご確認ください。",
       "no-speech": "音声が検出されませんでした。もう一度お試しください。",
-      "network": "通信状態が原因でエラーが発生しました。"
+      "network": "通信状態が原因でエラーが発生しました。電波の良い場所でもう一度お試しください。",
+      "audio-capture": "マイクが見つかりませんでした。端末のマイク設定をご確認ください。",
+      "service-not-allowed": "この端末・ブラウザでは音声入力サービスを利用できません。"
     };
-    showInputError(messages[e.error] || "音声入力でエラーが発生しました。文字で直接入力してください。");
+    showInputError((messages[e.error] || "音声入力でエラーが発生しました。") + `(エラーコード: ${e.error || "不明"})`);
   };
 
   recognition.onend = () => {
@@ -523,7 +526,8 @@ function toggleSpeechInput(textarea){
     if(btn) btn.textContent = "⏹ 停止する";
     if(statusEl) statusEl.textContent = "聞き取り中…";
   }catch(err){
-    showInputError("音声入力を開始できませんでした。文字で直接入力してください。");
+    console.error("SpeechRecognition start failed", err);
+    showInputError(`音声入力を開始できませんでした(${err.name || "エラー"})。文字で直接入力してください。`);
   }
 }
 
