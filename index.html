@@ -102,13 +102,7 @@
   .divider{ border:none; border-top:1px solid var(--border); margin:18px 0; }
   .example-box{ background:var(--teal-50); border-radius:14px; padding:13px 15px; margin-top:10px; }
   .example-box p{ margin:0; font-size:13px; line-height:1.7; color:var(--teal-900); }
-  .mic-area{ text-align:center; padding:16px 0 6px; }
-  .mic-btn{
-    width:68px; height:68px; border-radius:50%; border:none; cursor:pointer;
-    background:linear-gradient(135deg, var(--teal-100), #8fd8bf); color:var(--teal-900); font-size:24px; margin-bottom:10px;
-    box-shadow:0 8px 16px rgba(159,225,203,0.45); min-height:auto;
-  }
-  .mic-btn.recording{ background:linear-gradient(135deg, var(--coral-300), #e8815f); color:#fff; box-shadow:0 8px 16px rgba(240,153,123,0.45); }
+
   .q-card{ background:var(--teal-50); border-radius:16px; padding:13px 15px; margin-bottom:10px; }
   .q-label{ font-size:12px; color:var(--text-muted); margin:0 0 6px; font-weight:600; }
   .answer-text{ font-size:13px; line-height:1.7; margin:0; }
@@ -157,15 +151,15 @@ const DATA = {
   ],
   questions: [
     { id:"q1", text:"自己紹介をお願いします。", tip:"名前・簡単な経歴・意欲、の3つだけでOK",
-      answers:{ standard:"〇〇と申します。前職ではアパレルショップで3年間、接客の仕事をしていました。お客様と話すことが好きで、この仕事を続けたいと思い応募しました。よろしくお願いします。" } },
+      answers:{ standard:"〇〇と申します。前職ではアパレルショップで3年間、接客の仕事をしていました。お客様と話すことが好きで、この仕事を続けたいと思い応募しました。よろしくお願いします。", formal:"〇〇と申します。前職ではアパレルショップで3年間、接客業務に携わっておりました。お客様と接することが好きで、この仕事を続けたいと考え、応募いたしました。よろしくお願いいたします。" } },
     { id:"q2", text:"志望理由を教えてください。", tip:"なぜアパレル業界・この会社なのか、きっかけを一つ",
-      answers:{ standard:"以前からファッションが好きで、お客様に似合う商品を提案する仕事に興味がありました。御社の商品が好きで、ここで働きたいと思いました。" } },
+      answers:{ standard:"以前からファッションが好きで、お客様に似合う商品を提案する仕事に興味がありました。御社の商品が好きで、ここで働きたいと思いました。", formal:"以前からファッションに関心があり、お客様に似合う商品をご提案する仕事に興味を持っておりました。御社の商品を拝見し、ぜひこちらで働きたいと考え、志望いたしました。" } },
     { id:"q3", text:"あなたの強みは何ですか。", tip:"強み+それがわかる小さなエピソード",
-      answers:{ standard:"私の強みは、明るく人と話せることです。前の仕事でも、お客様から「感じがいいね」とよく言っていただきました。" } },
+      answers:{ standard:"私の強みは、明るく人と話せることです。前の仕事でも、お客様から「感じがいいね」とよく言っていただきました。", formal:"私の強みは、明るく人と接することができる点です。前職でも、お客様から「感じがいいですね」というお言葉をいただくことがございました。" } },
     { id:"q4", text:"接客で大切にしていることは何ですか。", tip:"お客様への気持ち・態度を一つ挙げる",
-      answers:{ standard:"お客様の気持ちを考えて、笑顔で対応することを大切にしています。それぞれのお客様のペースにあわせてお話を聞くようにしています。" } },
+      answers:{ standard:"お客様の気持ちを考えて、笑顔で対応することを大切にしています。それぞれのお客様のペースにあわせてお話を聞くようにしています。", formal:"お客様のお気持ちを考え、笑顔で対応することを大切にしております。お一人おひとりのお客様のペースに合わせて、お話を伺うよう心がけております。" } },
     { id:"q5", text:"最後に質問はありますか。", tip:"逆質問は意欲を見せるチャンス。1つ用意しておく",
-      answers:{ standard:"はい。入社した後、研修はありますか。もしあれば、どのような内容か教えていただきたいです。" } }
+      answers:{ standard:"はい。入社した後、研修はありますか。もしあれば、どのような内容か教えていただきたいです。", formal:"はい。入社後の研修制度について伺いたいです。もし研修がございましたら、どのような内容か教えていただけますでしょうか。" } }
   ]
 };
 
@@ -403,6 +397,7 @@ function renderPractice(){
   const total = DATA.questions.length;
   const ans = currentAnswer();
   const pct = Math.round(((state.qIndex + 1) / total) * 100);
+  const val = ans && ans.mode === "text" ? ans.text : "";
 
   app.innerHTML = `
     <div class="progress-wrap">
@@ -413,12 +408,15 @@ function renderPractice(){
     <p class="q-text">${q.text}</p>
     <p class="muted" style="margin-top:-8px; margin-bottom:14px;">ヒント: ${q.tip}</p>
 
-    <div id="input-area"></div>
-
-    <div style="display:flex; gap:8px; margin:14px 0 4px;">
-      <button class="btn" id="mode-text" style="${state.inputMode==='text' ? 'border-color:var(--teal-600);' : ''}">文字で回答</button>
-      <button class="btn" id="mode-voice" style="${state.inputMode==='voice' ? 'border-color:var(--teal-600);' : ''}">声で回答(録音)</button>
-    </div>
+    <textarea id="answer-text" placeholder="ここに入力するか、下のボタンで声で話してください">${val || ""}</textarea>
+    ${SUPPORT.speechRecognition ? `
+      <div class="speech-row">
+        <button class="btn" id="speech-btn" style="width:auto; padding:9px 16px;">🎤 声で入力する</button>
+        <span class="muted" id="speech-status"></span>
+      </div>
+      <p class="muted speech-caption">※声で入力した内容は文字に変換されます。誤変換する場合があるため、入力後に内容をご確認ください。</p>
+    ` : `<p class="muted" style="margin-top:10px;">この端末・ブラウザでは音声入力に対応していません(文字を直接入力してください)</p>`}
+    <div id="input-error" class="error-banner" style="display:none;"></div>
 
     <hr class="divider">
 
@@ -429,77 +427,35 @@ function renderPractice(){
     <button class="btn btn-primary" id="next-btn">${state.qIndex === total-1 ? "終了して振り返りを見る" : "次の質問へ"}</button>
   `;
 
-  renderInputArea(ans);
+  const textarea = document.getElementById("answer-text");
+  textarea.addEventListener("input", debounce(() => {
+    state.answers[state.qIndex] = { mode:"text", text: textarea.value };
+    saveDraft();
+  }, 500));
+  if(SUPPORT.speechRecognition){
+    document.getElementById("speech-btn").onclick = () => toggleSpeechInput(textarea);
+  }
 
   if(state.showExample){
     document.getElementById("example-slot").innerHTML = `
-      <div class="example-box"><p>${q.answers.standard}</p></div>
+      <div class="example-box"><p>${q.answers.formal}</p></div>
     `;
   }
 
-  document.getElementById("mode-text").onclick = () => switchMode("text");
-  document.getElementById("mode-voice").onclick = () => switchMode("voice");
   document.getElementById("toggle-example").onclick = () => setState({ showExample: !state.showExample });
   document.getElementById("next-btn").onclick = onNext;
 }
 
-function switchMode(mode){
-  flushTextIfNeeded();
-  setState({ inputMode: mode });
-}
-
 function flushTextIfNeeded(){
-  if(state.inputMode === "text"){
-    const ta = document.getElementById("answer-text");
-    if(ta){
-      state.answers[state.qIndex] = { mode:"text", text: ta.value };
-      saveDraft();
-    }
+  const ta = document.getElementById("answer-text");
+  if(ta){
+    state.answers[state.qIndex] = { mode:"text", text: ta.value };
+    saveDraft();
   }
 }
 
 function saveDraft(){
   Storage.saveDraft({ qIndex: state.qIndex, answers: state.answers, updatedAt: new Date().toISOString() });
-}
-
-function renderInputArea(ans){
-  const slot = document.getElementById("input-area");
-
-  if(state.inputMode === "text"){
-    const val = ans && ans.mode === "text" ? ans.text : "";
-    slot.innerHTML = `
-      <textarea id="answer-text" placeholder="ここに回答を入力してください">${val || ""}</textarea>
-      <div class="speech-row">
-        ${SUPPORT.speechRecognition
-          ? `<button class="btn" id="speech-btn" style="width:auto; padding:9px 16px;">🎙️ 音声入力</button><span class="muted" id="speech-status"></span>`
-          : `<span class="muted">この端末・ブラウザでは音声入力に対応していません(文字を直接入力してください)</span>`}
-      </div>
-      <div id="input-error" class="error-banner" style="display:none;"></div>
-    `;
-    const textarea = document.getElementById("answer-text");
-    textarea.addEventListener("input", debounce(() => {
-      state.answers[state.qIndex] = { mode:"text", text: textarea.value };
-      saveDraft();
-    }, 500));
-    if(SUPPORT.speechRecognition){
-      document.getElementById("speech-btn").onclick = () => toggleSpeechInput(textarea);
-    }
-  } else {
-    if(!SUPPORT.mediaRecorder){
-      slot.innerHTML = `<div class="error-banner" style="display:block;">この端末・ブラウザでは音声録音に対応していません。お手数ですが「文字で回答」をお使いください。</div>`;
-      return;
-    }
-    const hasVoice = ans && ans.mode === "voice";
-    slot.innerHTML = `
-      <div class="mic-area">
-        <button class="btn mic-btn ${state.recording ? 'recording' : ''}" id="mic-btn">${state.recording ? "■" : "🎤"}</button>
-        <p class="muted" style="margin:0;">${state.recording ? "録音中…もう一度押すと停止します" : (hasVoice ? "録音済みです。再生して確認できます" : "押すと録音を開始します")}</p>
-        ${hasVoice ? `<audio controls src="${ans.audioDataUrl}"></audio>` : ""}
-      </div>
-      <div id="input-error" class="error-banner" style="display:none;"></div>
-    `;
-    document.getElementById("mic-btn").onclick = onMicClick;
-  }
 }
 
 function showInputError(msg){
@@ -511,39 +467,6 @@ function clearInputError(){
   if(el){ el.style.display = "none"; el.textContent = ""; }
 }
 
-/* ---- 声で回答(録音してそのまま音声として保存) ---- */
-async function onMicClick(){
-  if(!state.recording){
-    clearInputError();
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
-      const recorder = new MediaRecorder(stream);
-      const chunks = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        try{
-          const blob = new Blob(chunks, { type:"audio/webm" });
-          const audioDataUrl = await blobToDataURL(blob);
-          const answers = [...state.answers];
-          answers[state.qIndex] = { mode:"voice", audioDataUrl };
-          state.answers = answers;
-          saveDraft();
-          setState({ recording:false });
-        }catch(e){
-          setState({ recording:false });
-          showInputError("録音の保存に失敗しました。もう一度お試しください。");
-        }
-      };
-      recorder.start();
-      setState({ recorder, recording:true });
-    }catch(err){
-      showInputError("マイクを使用できませんでした。ブラウザの設定でマイクの利用を許可してください。「文字で回答」に切り替えることもできます。");
-    }
-  } else {
-    state.recorder.stop();
-  }
-}
 
 /* ---- 音声入力(Web Speech APIで文字に変換して入力欄へ反映) ---- */
 function toggleSpeechInput(textarea){
@@ -588,7 +511,7 @@ function toggleSpeechInput(textarea){
     recognitionInstance = null;
     const btn = document.getElementById("speech-btn");
     const statusEl = document.getElementById("speech-status");
-    if(btn) btn.textContent = "🎙️ 音声入力";
+    if(btn) btn.textContent = "🎤 声で入力する";
     if(statusEl) statusEl.textContent = "";
   };
 
@@ -597,7 +520,7 @@ function toggleSpeechInput(textarea){
     recognitionInstance = recognition;
     const btn = document.getElementById("speech-btn");
     const statusEl = document.getElementById("speech-status");
-    if(btn) btn.textContent = "■ 停止";
+    if(btn) btn.textContent = "⏹ 停止する";
     if(statusEl) statusEl.textContent = "聞き取り中…";
   }catch(err){
     showInputError("音声入力を開始できませんでした。文字で直接入力してください。");
