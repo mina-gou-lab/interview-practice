@@ -309,6 +309,7 @@ let state = {
 
 let recognitionInstance = null; // Web Speech APIのインスタンス(画面外で保持)
 let speechShouldContinue = false; // ユーザーが聞き取りを継続したいかどうか(iOSの自動再開制御用)
+let userInitiatedStop = false; // ユーザーが自分で「停止する」を押したかどうか(iOSのabortedエラー誤表示防止用)
 
 const app = document.getElementById("app");
 
@@ -480,6 +481,7 @@ const IS_IOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform
 function toggleSpeechInput(textarea){
   if(recognitionInstance){
     speechShouldContinue = false;
+    userInitiatedStop = true;
     recognitionInstance.stop();
     return; // onendで後片付け
   }
@@ -514,6 +516,11 @@ function startRecognition(textarea, baseTextInit){
 
   recognition.onerror = (e) => {
     console.error("SpeechRecognition error", e.error, e);
+    if(e.error === "aborted" && userInitiatedStop){
+      // 自分で「停止する」を押した結果のabortedなので、エラーとしては扱わない
+      userInitiatedStop = false;
+      return;
+    }
     if(IS_IOS && speechShouldContinue && (e.error === "aborted" || e.error === "no-speech")){
       return;
     }
@@ -530,6 +537,7 @@ function startRecognition(textarea, baseTextInit){
 
   recognition.onend = () => {
     recognitionInstance = null;
+    userInitiatedStop = false;
     if(IS_IOS && speechShouldContinue){
       try{
         startRecognition(textarea, baseText);
