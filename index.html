@@ -115,7 +115,6 @@
   .history-date{ font-size:13px; font-weight:700; }
   .history-meta{ font-size:11px; color:var(--text-muted); margin-top:2px; }
   .empty-state{ text-align:center; padding:24px 0; color:var(--text-muted); font-size:13px; }
-  .speech-row{ display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
   .stack{ display:flex; flex-direction:column; gap:10px; }
 </style>
 </head>
@@ -127,8 +126,6 @@
    機能サポート判定(未対応ブラウザ・エラー対応のため)
 ========================================================= */
 const SUPPORT = {
-  mediaRecorder: !!(navigator.mediaDevices && window.MediaRecorder),
-  speechRecognition: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
   localStorage: (() => {
     try{
       const k = "__storage_test__";
@@ -297,34 +294,19 @@ let state = {
   screen: "top",        // top | tips | practice | review | history | historyDetail
   qIndex: 0,
   showExample: false,
-  inputMode: "text",    // text | voice
-  answers: [],           // {mode:'text', text} | {mode:'voice', audioDataUrl}
-  recorder: null,
-  recording: false,
+  inputMode: "text",    // text | voice(将来の拡張用に残置。現在はtextのみ使用)
+  answers: [],           // {mode:'text', text}
   hasHistory: false,
   hasDraft: false,
   lastSavedNotice: false,
   viewingSessionId: null
 };
 
-let recognitionInstance = null; // Web Speech APIのインスタンス(画面外で保持)
-let speechShouldContinue = false; // ユーザーが聞き取りを継続したいかどうか(iOSの自動再開制御用)
-let userInitiatedStop = false; // ユーザーが自分で「停止する」を押したかどうか(iOSのabortedエラー誤表示防止用)
-
 const app = document.getElementById("app");
 
 function setState(patch){
-  stopSpeechIfActive();
   state = { ...state, ...patch };
   render();
-}
-
-function stopSpeechIfActive(){
-  speechShouldContinue = false;
-  if(recognitionInstance){
-    try{ recognitionInstance.stop(); }catch(e){}
-    recognitionInstance = null;
-  }
 }
 
 async function refreshFlags(){
@@ -411,14 +393,7 @@ function renderPractice(){
     <p class="q-text">${q.text}</p>
     <p class="muted" style="margin-top:-8px; margin-bottom:14px;">ヒント: ${q.tip}</p>
 
-    <textarea id="answer-text" placeholder="ここに入力するか、下のボタンで声で話してください">${val || ""}</textarea>
-    ${SUPPORT.speechRecognition ? `
-      <div class="speech-row">
-        <button class="btn" id="speech-btn" style="width:auto; padding:9px 16px;">🎤 声で入力する</button>
-        <span class="muted" id="speech-status"></span>
-      </div>
-      <p class="muted speech-caption">※声で入力した内容は文字に変換されます。誤変換する場合があるため、入力後に内容をご確認ください。</p>
-    ` : `<p class="muted" style="margin-top:10px;">この端末・ブラウザでは音声入力に対応していません(文字を直接入力してください)</p>`}
+    <textarea id="answer-text" placeholder="ここに回答を入力してください">${val || ""}</textarea>
     <div id="input-error" class="error-banner" style="display:none;"></div>
 
     <hr class="divider">
@@ -435,9 +410,6 @@ function renderPractice(){
     state.answers[state.qIndex] = { mode:"text", text: textarea.value };
     saveDraft();
   }, 500));
-  if(SUPPORT.speechRecognition){
-    document.getElementById("speech-btn").onclick = () => toggleSpeechInput(textarea);
-  }
 
   if(state.showExample){
     document.getElementById("example-slot").innerHTML = `
@@ -468,106 +440,6 @@ function showInputError(msg){
 function clearInputError(){
   const el = document.getElementById("input-error");
   if(el){ el.style.display = "none"; el.textContent = ""; }
-}
-
-
-/* ---- 音声入力(Web Speech APIで文字に変換して入力欄へ反映) ---- */
-
-/* iOS(Chrome for iOSも含め、Appleのルールで内部エンジンはSafariと共通)は
-   continuous(連続認識)モードだと、発話の区切りごとに aborted エラーで
-   止まってしまう既知の不具合があるため、iOSだけ挙動を分ける */
-const IS_IOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-function toggleSpeechInput(textarea){
-  if(recognitionInstance){
-    speechShouldContinue = false;
-    userInitiatedStop = true;
-    recognitionInstance.stop();
-    return; // onendで後片付け
-  }
-  speechShouldContinue = true;
-  startRecognition(textarea, textarea.value ? textarea.value + " " : "");
-}
-
-function startRecognition(textarea, baseTextInit){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = new SR();
-  recognition.lang = "ja-JP";
-  recognition.continuous = !IS_IOS; // iOSはfalse(1文ずつ)、それ以外はtrue(連続)
-  recognition.interimResults = true;
-
-  let baseText = baseTextInit;
-  clearInputError();
-
-  recognition.onresult = (e) => {
-    let interim = "", final = "";
-    for(let i = e.resultIndex; i < e.results.length; i++){
-      const t = e.results[i][0].transcript;
-      if(e.results[i].isFinal) final += t;
-      else interim += t;
-    }
-    if(final){
-      baseText += final;
-      state.answers[state.qIndex] = { mode:"text", text: baseText.trim() };
-      saveDraft();
-    }
-    textarea.value = (baseText + interim).trim();
-  };
-
-  recognition.onerror = (e) => {
-    console.error("SpeechRecognition error", e.error, e);
-    if(IS_IOS && e.error === "aborted"){
-      // iOSでは、通常の停止や発話の区切りでもabortedが発生するため無視する
-      return;
-    }
-    if(IS_IOS && speechShouldContinue && e.error === "no-speech"){
-      return;
-    }
-    const messages = {
-      "not-allowed": "マイクの使用が許可されませんでした。ブラウザの設定をご確認ください。",
-      "no-speech": "音声が検出されませんでした。もう一度お試しください。",
-      "network": "通信状態が原因でエラーが発生しました。電波の良い場所でもう一度お試しください。",
-      "audio-capture": "マイクが見つかりませんでした。端末のマイク設定をご確認ください。",
-      "service-not-allowed": "この端末・ブラウザでは音声入力サービスを利用できません。"
-    };
-    speechShouldContinue = false;
-    showInputError((messages[e.error] || "音声入力でエラーが発生しました。") + `(エラーコード: ${e.error || "不明"})`);
-  };
-
-  recognition.onend = () => {
-    recognitionInstance = null;
-    userInitiatedStop = false;
-    if(IS_IOS && speechShouldContinue){
-      try{
-        startRecognition(textarea, baseText);
-        return;
-      }catch(e){
-        console.error("SpeechRecognition restart failed", e);
-      }
-    }
-    speechShouldContinue = false;
-    resetSpeechUI();
-  };
-
-  try{
-    recognition.start();
-    recognitionInstance = recognition;
-    const btn = document.getElementById("speech-btn");
-    const statusEl = document.getElementById("speech-status");
-    if(btn) btn.textContent = "⏹ 停止する";
-    if(statusEl) statusEl.textContent = "聞き取り中…";
-  }catch(err){
-    console.error("SpeechRecognition start failed", err);
-    speechShouldContinue = false;
-    showInputError(`音声入力を開始できませんでした(${err.name || "エラー"})。文字で直接入力してください。`);
-  }
-}
-
-function resetSpeechUI(){
-  const btn = document.getElementById("speech-btn");
-  const statusEl = document.getElementById("speech-status");
-  if(btn) btn.textContent = "🎤 声で入力する";
-  if(statusEl) statusEl.textContent = "";
 }
 
 function onNext(){
