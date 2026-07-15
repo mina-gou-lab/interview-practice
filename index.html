@@ -516,12 +516,11 @@ function startRecognition(textarea, baseTextInit){
 
   recognition.onerror = (e) => {
     console.error("SpeechRecognition error", e.error, e);
-    if(e.error === "aborted" && userInitiatedStop){
-      // 自分で「停止する」を押した結果のabortedなので、エラーとしては扱わない
-      userInitiatedStop = false;
+    if(IS_IOS && e.error === "aborted"){
+      // iOSでは、通常の停止や発話の区切りでもabortedが発生するため無視する
       return;
     }
-    if(IS_IOS && speechShouldContinue && (e.error === "aborted" || e.error === "no-speech")){
+    if(IS_IOS && speechShouldContinue && e.error === "no-speech"){
       return;
     }
     const messages = {
