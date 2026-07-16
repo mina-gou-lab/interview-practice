@@ -100,6 +100,9 @@
   }
   textarea:focus, .btn:focus-visible, input:focus-visible{ outline:2px solid var(--teal-100); outline-offset:1px; }
   .divider{ border:none; border-top:1px solid var(--border); margin:18px 0; }
+  .record-section{ margin:14px 0; }
+  .record-section audio{ width:100%; margin-top:8px; }
+  .btn-recording{ background:linear-gradient(135deg, var(--coral-300), #e8815f); color:#fff; border:none; }
   .example-box{ background:var(--teal-50); border-radius:14px; padding:13px 15px; margin-top:10px; }
   .example-box p{ margin:0; font-size:13px; line-height:1.7; color:var(--teal-900); }
 
@@ -126,6 +129,7 @@
    機能サポート判定(未対応ブラウザ・エラー対応のため)
 ========================================================= */
 const SUPPORT = {
+  mediaRecorder: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder),
   localStorage: (() => {
     try{
       const k = "__storage_test__";
@@ -294,8 +298,8 @@ let state = {
   screen: "top",        // top | tips | practice | review | history | historyDetail
   qIndex: 0,
   showExample: false,
-  inputMode: "text",    // text | voice(将来の拡張用に残置。現在はtextのみ使用)
-  answers: [],           // {mode:'text', text}
+  answers: [],           // {text, audioDataUrl} ※どちらか一方でも両方でも可
+  recording: false,
   hasHistory: false,
   hasDraft: false,
   lastSavedNotice: false,
@@ -312,7 +316,9 @@ function setState(patch){
 async function refreshFlags(){
   const [sessions, draft] = await Promise.all([Storage.list(), Storage.loadDraft()]);
   state.hasHistory = sessions.length > 0;
-  state.hasDraft = !!(draft && draft.answers && (draft.answers.some(a => a) || draft.qIndex > 0));
+  state.hasDraft = !!(draft && draft.answers && (
+    draft.answers.some(a => a && ((a.text && a.text.trim()) || a.audioDataUrl)) || draft.qIndex > 0
+  ));
 }
 
 function render(){
@@ -346,13 +352,13 @@ function renderTop(){
       if(!draft){ setState({ screen:"tips" }); return; }
       setState({
         screen:"practice", qIndex: draft.qIndex || 0, answers: draft.answers || [],
-        inputMode:"text", showExample:false
+        showExample:false
       });
     };
   }
   document.getElementById("start-btn").onclick = async () => {
     await Storage.clearDraft();
-    setState({ screen:"tips", qIndex:0, answers:[], showExample:false, inputMode:"text" });
+    setState({ screen:"tips", qIndex:0, answers:[], showExample:false });
   };
   const historyBtn = document.getElementById("history-btn");
   if(historyBtn) historyBtn.onclick = () => setState({ screen:"history" });
@@ -375,14 +381,30 @@ function renderTips(){
 }
 
 /* ------------------------- 面談練習 ------------------------- */
-function currentAnswer(){ return state.answers[state.qIndex] || null; }
+function currentAnswer(){ return state.answers[state.qIndex] || { text:"", audioDataUrl:null }; }
 
 function renderPractice(){
   const q = DATA.questions[state.qIndex];
   const total = DATA.questions.length;
   const ans = currentAnswer();
   const pct = Math.round(((state.qIndex + 1) / total) * 100);
-  const val = ans && ans.mode === "text" ? ans.text : "";
+
+  let recordSectionHtml;
+  if(!SUPPORT.mediaRecorder){
+    recordSectionHtml = `<p class="muted">このブラウザでは録音機能は利用できません。</p>`;
+  } else if(state.recording){
+    recordSectionHtml = `
+      <button class="btn btn-recording" id="record-btn">⏹ 停止する</button>
+      <p class="muted" style="margin:8px 0 0;">録音中…</p>
+    `;
+  } else if(ans.audioDataUrl){
+    recordSectionHtml = `
+      <audio controls src="${ans.audioDataUrl}"></audio>
+      <button class="btn" id="rerecord-btn" style="margin-top:8px; width:auto; padding:9px 16px;">🔄 録り直す</button>
+    `;
+  } else {
+    recordSectionHtml = `<button class="btn" id="record-btn" style="width:auto; padding:9px 16px;">🎤 録音する</button>`;
+  }
 
   app.innerHTML = `
     <div class="progress-wrap">
@@ -393,7 +415,12 @@ function renderPractice(){
     <p class="q-text">${q.text}</p>
     <p class="muted" style="margin-top:-8px; margin-bottom:14px;">ヒント: ${q.tip}</p>
 
-    <textarea id="answer-text" placeholder="ここに回答を入力してください">${val || ""}</textarea>
+    <textarea id="answer-text" placeholder="ここに回答を入力してください">${ans.text || ""}</textarea>
+
+    <hr class="divider">
+
+    <p class="muted" style="margin:0 0 8px;">声に出しての練習(任意)</p>
+    <div class="record-section">${recordSectionHtml}</div>
     <div id="input-error" class="error-banner" style="display:none;"></div>
 
     <hr class="divider">
@@ -407,9 +434,17 @@ function renderPractice(){
 
   const textarea = document.getElementById("answer-text");
   textarea.addEventListener("input", debounce(() => {
-    state.answers[state.qIndex] = { mode:"text", text: textarea.value };
+    const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
+    state.answers[state.qIndex] = { ...current, text: textarea.value };
     saveDraft();
   }, 500));
+
+  if(SUPPORT.mediaRecorder){
+    const recordBtn = document.getElementById("record-btn");
+    if(recordBtn) recordBtn.onclick = toggleRecording;
+    const rerecordBtn = document.getElementById("rerecord-btn");
+    if(rerecordBtn) rerecordBtn.onclick = reRecord;
+  }
 
   if(state.showExample){
     document.getElementById("example-slot").innerHTML = `
@@ -421,10 +456,85 @@ function renderPractice(){
   document.getElementById("next-btn").onclick = onNext;
 }
 
+/* ブラウザによって対応する録音フォーマットが異なるため、使えるものを順に試す */
+function pickMimeType(){
+  if(!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  for(const c of candidates){
+    if(MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return "";
+}
+
+let activeRecorder = null;
+
+function toggleRecording(){
+  if(state.recording){
+    if(activeRecorder){ try{ activeRecorder.stop(); }catch(e){} }
+    return; // 後処理はonstopで行う
+  }
+  clearInputError();
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
+    let recorder;
+    try{
+      const mimeType = pickMimeType();
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    }catch(err){
+      console.error(err);
+      stream.getTracks().forEach(t => t.stop());
+      showInputError(`このブラウザでは録音を開始できませんでした(${err.name || "エラー"})。`);
+      return;
+    }
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
+
+    recorder.onerror = (e) => {
+      console.error("MediaRecorder error", e.error);
+      stream.getTracks().forEach(t => t.stop());
+      activeRecorder = null;
+      setState({ recording:false });
+      showInputError(`録音中にエラーが発生しました(${e.error && e.error.name ? e.error.name : "不明なエラー"})。もう一度お試しください。`);
+    };
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      activeRecorder = null;
+      try{
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        if(blob.size === 0) throw new Error("empty-recording");
+        const audioDataUrl = await blobToDataURL(blob);
+        const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
+        state.answers[state.qIndex] = { ...current, audioDataUrl };
+        saveDraft();
+        setState({ recording:false });
+      }catch(e){
+        console.error(e);
+        setState({ recording:false });
+        showInputError("録音の保存に失敗しました。もう一度お試しください。");
+      }
+    };
+
+    recorder.start();
+    activeRecorder = recorder;
+    setState({ recording:true });
+  }).catch(err => {
+    console.error(err);
+    showInputError(`マイクを使用できませんでした(${err.name || "エラー"})。ブラウザの設定でマイクの利用を許可してください。`);
+  });
+}
+
+function reRecord(){
+  const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
+  state.answers[state.qIndex] = { ...current, audioDataUrl: null };
+  saveDraft();
+  setState({});
+}
+
 function flushTextIfNeeded(){
   const ta = document.getElementById("answer-text");
   if(ta){
-    state.answers[state.qIndex] = { mode:"text", text: ta.value };
+    const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
+    state.answers[state.qIndex] = { ...current, text: ta.value };
     saveDraft();
   }
 }
@@ -448,7 +558,7 @@ function onNext(){
   if(state.qIndex === total - 1){
     finishAndSave();
   } else {
-    setState({ qIndex: state.qIndex + 1, showExample:false, inputMode:"text" });
+    setState({ qIndex: state.qIndex + 1, showExample:false });
     saveDraft();
   }
 }
@@ -459,13 +569,12 @@ async function finishAndSave(){
     id: "sess_" + Date.now(),
     createdAt: new Date().toISOString(),
     answers: DATA.questions.map((q, i) => {
-      const a = state.answers[i];
+      const a = state.answers[i] || {};
       return {
         questionId: q.id,
         questionText: q.text,
-        mode: a ? a.mode : null,
-        text: a && a.mode === "text" ? a.text : null,
-        audioDataUrl: a && a.mode === "voice" ? a.audioDataUrl : null
+        text: a.text || null,
+        audioDataUrl: a.audioDataUrl || null
       };
     })
   };
@@ -484,13 +593,11 @@ function renderReview(){
       ? `<div class="note-box">${getSavedConfirmationText()}</div>`
       : `<div class="warn-box">保存に失敗しました(このセッション内でのみ確認できます)。</div>`}
     ${DATA.questions.map((q,i) => {
-      const a = state.answers[i];
-      let body = `<p class="answer-text muted">(未回答)</p>`;
-      if(a && a.mode === "text"){
-        body = `<p class="answer-text">${a.text || "(未回答)"}</p>`;
-      } else if(a && a.mode === "voice"){
-        body = `<audio controls src="${a.audioDataUrl}"></audio>`;
-      }
+      const a = state.answers[i] || {};
+      let body = "";
+      if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
+      if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
+      if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
       return `<div class="q-card"><p class="q-label">${i+1}. ${q.text}</p>${body}</div>`;
     }).join("")}
     <div style="height:6px;"></div>
@@ -500,7 +607,7 @@ function renderReview(){
     </div>
   `;
   document.getElementById("restart-btn").onclick = () => setState({
-    screen:"top", qIndex:0, answers:[], showExample:false, inputMode:"text", lastSavedNotice:false
+    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false
   });
   document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false });
 }
@@ -545,7 +652,7 @@ function formatDate(iso){
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
 function countAnswered(session){
-  return session.answers.filter(a => a.mode === "text" || a.mode === "voice").length;
+  return session.answers.filter(a => (a.text && a.text.trim()) || a.audioDataUrl).length;
 }
 
 /* ------------------------- 過去の練習の詳細 ------------------------- */
@@ -561,12 +668,10 @@ async function renderHistoryDetail(){
     <h2>練習の記録</h2>
     <p class="muted center" style="margin-top:-10px; margin-bottom:16px;">${formatDate(session.createdAt)}</p>
     ${session.answers.map((a,i) => {
-      let body = `<p class="answer-text muted">(未回答)</p>`;
-      if(a.mode === "text"){
-        body = `<p class="answer-text">${a.text || "(未回答)"}</p>`;
-      } else if(a.mode === "voice" && a.audioDataUrl){
-        body = `<audio controls src="${a.audioDataUrl}"></audio>`;
-      }
+      let body = "";
+      if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
+      if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
+      if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
       return `<div class="q-card"><p class="q-label">${i+1}. ${a.questionText}</p>${body}</div>`;
     }).join("")}
     <div style="height:6px;"></div>
