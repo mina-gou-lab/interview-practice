@@ -102,6 +102,7 @@
   .divider{ border:none; border-top:1px solid var(--border); margin:18px 0; }
   .record-section{ margin:14px 0; }
   .record-section audio{ width:100%; margin-top:8px; }
+  .btn:disabled{ opacity:0.6; cursor:default; }
   .btn-recording{ background:linear-gradient(135deg, var(--coral-300), #e8815f); color:#fff; border:none; }
   .example-box{ background:var(--teal-50); border-radius:14px; padding:13px 15px; margin-top:10px; }
   .example-box p{ margin:0; font-size:13px; line-height:1.7; color:var(--teal-900); }
@@ -167,13 +168,14 @@ const DATA = {
 /* =========================================================
    設定
    ------------------------------------------------------
-   cloudEnabled: 将来Supabase等でクラウド保存・管理者閲覧を
-   実装したら true に切り替える。true にすると、求職者向けの
-   説明文が「担当者が確認する場合があります」に自動的に変わる。
-   (実際に閲覧できるようになる前に true にしないこと)
+   cloudEnabled: 求職者向けの説明文を切り替えるスイッチ。
+   GAS送信機能により実際に担当者が回答を確認できるようになったため true。
+   gasWebAppUrl: Google Apps ScriptをWebアプリとして公開したときのURL。
+   ここが空欄の間は「送信」機能は表示されない(ローカル保存のみで動作する)。
 ========================================================= */
 const CONFIG = {
-  cloudEnabled: false
+  cloudEnabled: true,
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec" 
 };
 
 function getPrivacyNoticeText(){
@@ -183,37 +185,36 @@ function getPrivacyNoticeText(){
 }
 
 function getSavedConfirmationText(){
-  return CONFIG.cloudEnabled
-    ? "この記録はクラウドに保存されました。担当者が内容を確認できます。トップ画面の「過去の練習を見る」からも、いつでも見返せます。"
-    : "この記録はブラウザに保存されました。トップ画面の「過去の練習を見る」からいつでも見返せます。";
+  return "この記録はブラウザに保存されました。トップ画面の「過去の練習を見る」からいつでも見返せます。";
 }
 
 /* =========================================================
-   求職者ごとの専用URL対応
+   求職者(スタッフ)ごとの専用URL対応
    ------------------------------------------------------
    ?id=XXXX の形でアクセスされた場合、そのIDを使う。
-   なければ、この端末用のIDを自動生成して使い続ける。
-   このIDは、将来Supabaseに移行したときの
-   「どの求職者の回答か」を結びつけるキーとしてそのまま使う想定。
+   なければ、この端末用のIDを自動生成して使い続ける
+   (この場合はスタッフIDが不明なため、GASへの送信ボタンは表示しない)。
 ========================================================= */
 function getSessionId(){
   const params = new URLSearchParams(window.location.search);
   const fromUrl = params.get("id");
   if(fromUrl){
     try{ localStorage.setItem("apparel_interview_last_id", fromUrl); }catch(e){}
-    return fromUrl;
+    return { id: fromUrl, fromUrl: true };
   }
   try{
     const saved = localStorage.getItem("apparel_interview_last_id");
-    if(saved) return saved;
+    if(saved) return { id: saved, fromUrl: false };
   }catch(e){}
   const generated = (window.crypto && crypto.randomUUID)
     ? crypto.randomUUID()
     : "local_" + Date.now() + "_" + Math.random().toString(36).slice(2);
   try{ localStorage.setItem("apparel_interview_last_id", generated); }catch(e){}
-  return generated;
+  return { id: generated, fromUrl: false };
 }
-const SESSION_ID = getSessionId();
+const SESSION = getSessionId();
+const SESSION_ID = SESSION.id;
+const SESSION_ID_FROM_URL = SESSION.fromUrl;
 
 /* =========================================================
    Storage抽象化レイヤー
@@ -303,7 +304,8 @@ let state = {
   hasHistory: false,
   hasDraft: false,
   lastSavedNotice: false,
-  viewingSessionId: null
+  viewingSessionId: null,
+  submitStatus: "idle"   // idle | sending | success | error
 };
 
 const app = document.getElementById("app");
@@ -581,17 +583,37 @@ async function finishAndSave(){
   const saved = await Storage.save(session);
   await Storage.clearDraft();
   await refreshFlags();
-  setState({ screen:"review", lastSavedNotice: saved });
+
+  const willAutoSubmit = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
+  setState({ screen:"review", lastSavedNotice: saved, submitStatus: willAutoSubmit ? "sending" : "idle" });
+
+  if(willAutoSubmit){
+    submitToStaff(); // 「終了する」と同時に自動送信。結果は振り返り画面に随時反映される
+  }
 }
 
 /* ------------------------- 振り返り(直後) ------------------------- */
 function renderReview(){
+  const autoSubmitting = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
+
+  let cloudStatusHtml = "";
+  if(autoSubmitting){
+    if(state.submitStatus === "sending"){
+      cloudStatusHtml = `<p class="muted center" style="margin:0 0 12px;">担当者への送信中…</p>`;
+    } else if(state.submitStatus === "success"){
+      cloudStatusHtml = `<div class="note-box">✓ 担当者に送信しました。面談準備のサポートを目的として、担当者がこの内容を確認する場合があります。</div>`;
+    } else if(state.submitStatus === "error"){
+      cloudStatusHtml = `<div class="warn-box">担当者への送信に失敗しました。通信状況をご確認のうえ、<a href="#" id="retry-submit-link">もう一度送信する</a>をお試しください。</div>`;
+    }
+  }
+
   app.innerHTML = `
     <h2>今日の練習 🎉</h2>
     <p class="muted center" style="margin-top:-10px;">全 ${DATA.questions.length} 問・お疲れ様でした</p>
     ${state.lastSavedNotice
       ? `<div class="note-box">${getSavedConfirmationText()}</div>`
       : `<div class="warn-box">保存に失敗しました(このセッション内でのみ確認できます)。</div>`}
+    ${cloudStatusHtml}
     ${DATA.questions.map((q,i) => {
       const a = state.answers[i] || {};
       let body = "";
@@ -606,10 +628,50 @@ function renderReview(){
       <button class="btn" id="top-btn">トップ画面に戻る</button>
     </div>
   `;
+  const retryLink = document.getElementById("retry-submit-link");
+  if(retryLink){
+    retryLink.onclick = (e) => { e.preventDefault(); submitToStaff(); };
+  }
   document.getElementById("restart-btn").onclick = () => setState({
-    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false
+    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false, submitStatus:"idle"
   });
-  document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false });
+  document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false, submitStatus:"idle" });
+}
+
+/* ------------------------- スタッフへの送信(Google Apps Script) ------------------------- */
+async function submitToStaff(){
+  setState({ submitStatus: "sending" });
+  const payload = {
+    id: SESSION_ID,
+    submittedAt: new Date().toISOString(),
+    answers: DATA.questions.map((q, i) => {
+      const a = state.answers[i] || {};
+      return {
+        questionId: q.id,
+        questionText: q.text,
+        text: a.text || "",
+        audioDataUrl: a.audioDataUrl || null
+      };
+    })
+  };
+  try{
+    // GASのWebアプリはContent-Type: application/jsonだとCORSで弾かれることがあるため、
+    // text/plainで送り、GAS側でJSON.parseする方式にしている(GAS連携の定番の回避策)
+    const res = await fetch(CONFIG.gasWebAppUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if(json && json.status === "ok"){
+      setState({ submitStatus: "success" });
+    } else {
+      throw new Error((json && json.message) || "unknown error");
+    }
+  }catch(err){
+    console.error("submitToStaff failed", err);
+    setState({ submitStatus: "error" });
+  }
 }
 
 /* ------------------------- 過去の練習一覧 ------------------------- */
