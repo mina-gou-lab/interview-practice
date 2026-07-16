@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="description" content="アパレル販売職を目指す方向けの、一人でできる面談練習サイトです。スマートフォンで5〜10分、話し方のポイント確認から模擬質問への回答まで練習できます。">
+<meta name="description" content="アパレル販売職を目指す方向けの、一人でできる面談練習サイトです。スマートフォンで5〜10分、面談のポイント確認から模擬質問への回答まで練習できます。">
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👗</text></svg>">
 <title>アパレル面談練習</title>
@@ -144,11 +144,11 @@ const SUPPORT = {
    質問データ
 ========================================================= */
 const DATA = {
-  speakingTips: [
-    { icon:"🗣", text:"いつもよりゆっくり話しましょう" },
+  interviewTips: [
     { icon:"😊", text:"笑顔を意識しましょう" },
-    { icon:"❓", text:"わからない時は聞き返しても大丈夫です" },
-    { icon:"💬", text:"結論から、簡潔に伝えましょう" }
+    { icon:"🗣", text:"いつもよりゆっくり話しましょう" },
+    { icon:"💬", text:"結論から簡潔に伝えましょう" },
+    { icon:"📝", text:"回答を整理してから、声に出して練習すると本番で話しやすくなります" }
   ],
   questions: [
     { id:"q1", text:"自己紹介をお願いします。", tip:"名前・簡単な経歴・意欲、の3つだけでOK",
@@ -364,11 +364,11 @@ function renderTop(){
   if(historyBtn) historyBtn.onclick = () => setState({ screen:"history" });
 }
 
-/* ------------------------- 話し方のポイント ------------------------- */
+/* ------------------------- 面談のポイント ------------------------- */
 function renderTips(){
   app.innerHTML = `
-    <h2>話し方のポイント</h2>
-    ${DATA.speakingTips.map(t => `
+    <h2>面談のポイント</h2>
+    ${DATA.interviewTips.map(t => `
       <div class="tip-row">
         <div class="tip-icon">${t.icon}</div>
         <p class="tip-text">${t.text}</p>
