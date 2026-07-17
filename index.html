@@ -64,12 +64,14 @@
     transition:transform .08s ease, background .15s ease, border-color .15s ease;
   }
   .btn:active{ transform:scale(0.97); }
-  .btn:hover{ background:#FAFAF7; }
+  @media (hover: hover) {
+    .btn:hover{ background:#FAFAF7; }
+    .btn-primary:hover{ filter:brightness(0.98); }
+  }
   .btn-primary{
     background:linear-gradient(135deg, var(--teal-100), #8fd8bf); color:var(--teal-900); border:none; font-weight:700;
     box-shadow:0 8px 16px rgba(159,225,203,0.45);
   }
-  .btn-primary:hover{ filter:brightness(0.98); }
   .btn-ghost{ background:transparent; border:none; color:var(--teal-900); text-align:left; padding-left:0; width:auto; min-height:auto; }
   .btn-danger{ background:transparent; border:none; color:#B23B22; font-size:12px; text-decoration:underline; width:auto; min-height:auto; padding:4px 0;}
   .note-box{
@@ -175,7 +177,7 @@ const DATA = {
 ========================================================= */
 const CONFIG = {
   cloudEnabled: true,
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec" 
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
 };
 
 function getPrivacyNoticeText(){
