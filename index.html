@@ -103,7 +103,7 @@
   .record-section{ margin:14px 0; }
   .record-section audio{ width:100%; margin-top:8px; }
   .btn:disabled{ opacity:0.6; cursor:default; }
-  .btn-recording{ background:linear-gradient(135deg, var(--coral-300), #e8815f); color:#fff; border:none; }
+  .btn-recording{ background:#E5484D; color:#fff; border:none; font-weight:700; box-shadow:0 8px 18px rgba(229,72,77,0.4); }
   .example-box{ background:var(--teal-50); border-radius:14px; padding:13px 15px; margin-top:10px; }
   .example-box p{ margin:0; font-size:13px; line-height:1.7; color:var(--teal-900); }
 
@@ -160,7 +160,7 @@ const DATA = {
       answers:{ standard:"私の強みは、明るく人と話せることです。前の仕事でも、お客様から「感じがいいね」とよく言っていただきました。", formal:"私の強みは、明るく人と接することができる点です。前職でも、お客様から「感じがいいですね」というお言葉をいただくことがございました。" } },
     { id:"q4", text:"接客で大切にしていることは何ですか。", tip:"お客様への気持ち・態度を一つ挙げる",
       answers:{ standard:"お客様の気持ちを考えて、笑顔で対応することを大切にしています。それぞれのお客様のペースにあわせてお話を聞くようにしています。", formal:"お客様のお気持ちを考え、笑顔で対応することを大切にしております。お一人おひとりのお客様のペースに合わせて、お話を伺うよう心がけております。" } },
-    { id:"q5", text:"最後に質問はありますか。", tip:"逆質問は意欲を見せるチャンス。1つ用意しておく",
+    { id:"q5", text:"面談担当者へ聞いてみたいことはありますか?", tip:"逆質問は意欲を見せるチャンス。1つ用意しておく",
       answers:{ standard:"はい。入社した後、研修はありますか。もしあれば、どのような内容か教えていただきたいです。", formal:"はい。入社後の研修制度について伺いたいです。もし研修がございましたら、どのような内容か教えていただけますでしょうか。" } }
   ]
 };
@@ -396,7 +396,7 @@ function renderPractice(){
     recordSectionHtml = `<p class="muted">このブラウザでは録音機能は利用できません。</p>`;
   } else if(state.recording){
     recordSectionHtml = `
-      <button class="btn btn-recording" id="record-btn">⏹ 停止する</button>
+      <button class="btn btn-recording" id="record-btn">⏹ 録音を停止する</button>
       <p class="muted" style="margin:8px 0 0;">録音中…</p>
     `;
   } else if(ans.audioDataUrl){
