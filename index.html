@@ -145,6 +145,10 @@ const SUPPORT = {
 
 /* =========================================================
    質問データ
+   ------------------------------------------------------
+   話し方(面談)のポイントのみコード内に保持。
+   質問・回答例はコード内に持たず、Google Apps Script経由で
+   スプレッドシート「質問マスタ」から取得する(questionsは起動時に読み込む)。
 ========================================================= */
 const DATA = {
   interviewTips: [
@@ -153,18 +157,7 @@ const DATA = {
     { icon:"💬", text:"結論から簡潔に伝えましょう" },
     { icon:"📝", text:"回答を整理してから、声に出して練習すると本番で話しやすくなります" }
   ],
-  questions: [
-    { id:"q1", text:"自己紹介をお願いします。", tip:"名前・簡単な経歴・意欲、の3つだけでOK",
-      answers:{ standard:"〇〇と申します。前職ではアパレルショップで3年間、接客の仕事をしていました。お客様と話すことが好きで、この仕事を続けたいと思い応募しました。よろしくお願いします。", formal:"〇〇と申します。前職ではアパレルショップで3年間、接客業務に携わっておりました。お客様と接することが好きで、この仕事を続けたいと考え、応募いたしました。よろしくお願いいたします。" } },
-    { id:"q2", text:"志望理由を教えてください。", tip:"なぜアパレル業界・この会社なのか、きっかけを一つ",
-      answers:{ standard:"以前からファッションが好きで、お客様に似合う商品を提案する仕事に興味がありました。御社の商品が好きで、ここで働きたいと思いました。", formal:"以前からファッションに関心があり、お客様に似合う商品をご提案する仕事に興味を持っておりました。御社の商品を拝見し、ぜひこちらで働きたいと考え、志望いたしました。" } },
-    { id:"q3", text:"あなたの強みは何ですか。", tip:"強み+それがわかる小さなエピソード",
-      answers:{ standard:"私の強みは、明るく人と話せることです。前の仕事でも、お客様から「感じがいいね」とよく言っていただきました。", formal:"私の強みは、明るく人と接することができる点です。前職でも、お客様から「感じがいいですね」というお言葉をいただくことがございました。" } },
-    { id:"q4", text:"接客で大切にしていることは何ですか。", tip:"お客様への気持ち・態度を一つ挙げる",
-      answers:{ standard:"お客様の気持ちを考えて、笑顔で対応することを大切にしています。それぞれのお客様のペースにあわせてお話を聞くようにしています。", formal:"お客様のお気持ちを考え、笑顔で対応することを大切にしております。お一人おひとりのお客様のペースに合わせて、お話を伺うよう心がけております。" } },
-    { id:"q5", text:"面談担当者へ聞いてみたいことはありますか?", tip:"逆質問は意欲を見せるチャンス。1つ用意しておく",
-      answers:{ standard:"はい。入社した後、研修はありますか。もしあれば、どのような内容か教えていただきたいです。", formal:"はい。入社後の研修制度について伺いたいです。もし研修がございましたら、どのような内容か教えていただけますでしょうか。" } }
-  ]
+  questions: [] // 起動時にloadQuestions()で読み込まれる
 };
 
 /* =========================================================
@@ -217,6 +210,31 @@ function getSessionId(){
 const SESSION = getSessionId();
 const SESSION_ID = SESSION.id;
 const SESSION_ID_FROM_URL = SESSION.fromUrl;
+
+/* URLの ?brand= を読み取る(例: ?id=LX001&brand=PRADA)。指定がなければ空文字。
+   その場合、GAS側で「共通」ブランドの質問セットにフォールバックする。 */
+const BRAND_ID = new URLSearchParams(window.location.search).get("brand") || "";
+
+/* =========================================================
+   質問データの読み込み(Google Apps Script経由でスプレッドシートから取得)
+========================================================= */
+async function loadQuestions(){
+  if(!CONFIG.gasWebAppUrl){
+    throw new Error("gas-not-configured");
+  }
+  const url = CONFIG.gasWebAppUrl + "?brand=" + encodeURIComponent(BRAND_ID);
+  const res = await fetch(url, { method: "GET" });
+  const json = await res.json();
+  if(!json || json.status !== "ok" || !Array.isArray(json.questions) || json.questions.length === 0){
+    throw new Error((json && json.message) || "no-questions");
+  }
+  return json.questions.map(q => ({
+    id: q.id,
+    text: q.text,
+    tip: q.tip || "",
+    answerExample: q.answerExample || ""
+  }));
+}
 
 /* =========================================================
    Storage抽象化レイヤー
@@ -452,7 +470,7 @@ function renderPractice(){
 
   if(state.showExample){
     document.getElementById("example-slot").innerHTML = `
-      <div class="example-box"><p>${q.answers.formal}</p></div>
+      <div class="example-box"><p>${q.answerExample}</p></div>
     `;
   }
 
@@ -747,10 +765,43 @@ async function renderHistoryDetail(){
 /* =========================================================
    起動
 ========================================================= */
-(async () => {
+function renderLoading(){
+  app.innerHTML = `
+    <div class="accent-bar"></div>
+    <div class="logo-mark">👗</div>
+    <h1>アパレル面談練習</h1>
+    <p class="muted center">質問を読み込んでいます…</p>
+  `;
+}
+
+function renderLoadError(reason){
+  const messages = {
+    "gas-not-configured": "質問データの取得先が設定されていません。管理者にご確認ください。",
+    "no-questions": "この専用URLに対応する質問が見つかりませんでした。URLが正しいか、管理者にご確認ください。"
+  };
+  app.innerHTML = `
+    <div class="accent-bar"></div>
+    <div class="logo-mark">👗</div>
+    <h1>アパレル面談練習</h1>
+    <div class="warn-box">${messages[reason] || "質問の読み込みに失敗しました。通信状況をご確認のうえ、もう一度お試しください。"}</div>
+    <button class="btn btn-primary" id="retry-load-btn">もう一度読み込む</button>
+  `;
+  document.getElementById("retry-load-btn").onclick = boot;
+}
+
+async function boot(){
+  renderLoading();
   await refreshFlags();
-  render();
-})();
+  try{
+    DATA.questions = await loadQuestions();
+    render();
+  }catch(err){
+    console.error("loadQuestions failed", err);
+    renderLoadError(err && err.message);
+  }
+}
+
+boot();
 </script>
 </body>
 </html>
