@@ -231,26 +231,49 @@ function fetchWithTimeout(url, timeoutMs){
   return fetch(url, { method: "GET", signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 
-async function loadQuestionsOnce(){
+async function loadQuestionsOnce(attemptLabel){
   if(!CONFIG.gasWebAppUrl){
     throw new Error("gas-not-configured");
   }
   const url = CONFIG.gasWebAppUrl + "?brand=" + encodeURIComponent(BRAND_ID);
+  const t0 = performance.now();
   let res;
   try{
     res = await fetchWithTimeout(url, LOAD_TIMEOUT_MS);
   }catch(err){
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    console.error(`[${attemptLabel}] fetch失敗 (${elapsed}秒経過): ${err.name} - ${err.message}`);
     if(err.name === "AbortError") throw new Error("timeout");
     throw new Error("network");
   }
+  const fetchElapsed = ((performance.now() - t0) / 1000).toFixed(2);
+  console.log(`[${attemptLabel}] fetch完了: ${fetchElapsed}秒 (HTTPステータス: ${res.status})`);
+
+  if(!res.ok){
+    console.error(`[${attemptLabel}] HTTPエラー: ステータス ${res.status} ${res.statusText}`);
+    throw new Error("network");
+  }
+
+  const t1 = performance.now();
   let json;
   try{
     json = await res.json();
   }catch(err){
+    const parseElapsed = ((performance.now() - t1) / 1000).toFixed(2);
+    console.error(`[${attemptLabel}] レスポンスのJSON解析に失敗 (解析に${parseElapsed}秒): ${err.message}`);
     throw new Error("invalid-response");
   }
+
+  // GAS側がサーバー処理時間(gasElapsedMs)を返すよう対応している場合、ここでログに出す
+  // (対応していない場合はundefinedのまま表示されないだけで、動作に影響はない)
+  if(json && typeof json.gasElapsedMs === "number"){
+    console.log(`[${attemptLabel}] GAS側の処理時間: ${(json.gasElapsedMs / 1000).toFixed(2)}秒(サーバー内で計測)`);
+  }
+
   if(!json || json.status !== "ok" || !Array.isArray(json.questions) || json.questions.length === 0){
-    throw new Error((json && json.message) || "no-questions");
+    const msg = (json && json.message) || "no-questions";
+    console.error(`[${attemptLabel}] GASからのエラー応答: ${msg}`, json);
+    throw new Error(msg);
   }
   return json.questions.map(q => ({
     id: q.id,
@@ -263,18 +286,27 @@ async function loadQuestionsOnce(){
 /* 呼び出し元にリアルタイムで状況を伝えるため、進捗コールバックを受け取る */
 async function loadQuestions(onAttempt){
   let lastErr;
+  const overallStart = performance.now();
   for(let attempt = 1; attempt <= LOAD_MAX_RETRIES + 1; attempt++){
     if(onAttempt) onAttempt(attempt);
+    const label = `質問読み込み 試行${attempt}/${LOAD_MAX_RETRIES + 1}`;
     try{
-      return await loadQuestionsOnce();
+      const result = await loadQuestionsOnce(label);
+      const totalElapsed = ((performance.now() - overallStart) / 1000).toFixed(2);
+      console.log(`[${label}] 成功(合計経過時間: ${totalElapsed}秒)`);
+      return result;
     }catch(err){
       lastErr = err;
-      console.error(`質問の読み込みに失敗しました(試行 ${attempt}/${LOAD_MAX_RETRIES + 1})`, err);
+      console.error(`[${label}] 失敗: ${err.message}`, err);
       if(attempt <= LOAD_MAX_RETRIES){
-        await new Promise(r => setTimeout(r, 800 * attempt)); // 少し間隔をあけて再試行
+        const waitMs = 800 * attempt;
+        console.log(`[${label}] ${waitMs}ms待ってから再試行します`);
+        await new Promise(r => setTimeout(r, waitMs));
       }
     }
   }
+  const totalElapsed = ((performance.now() - overallStart) / 1000).toFixed(2);
+  console.error(`質問の読み込みが全て失敗しました(合計経過時間: ${totalElapsed}秒、最終エラー: ${lastErr && lastErr.message}`);
   throw lastErr;
 }
 
