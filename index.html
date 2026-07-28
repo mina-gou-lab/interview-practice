@@ -170,7 +170,7 @@ const DATA = {
 ========================================================= */
 const CONFIG = {
   cloudEnabled: true,
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
+  gasWebAppUrl: "" // 例:"https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
 };
 
 function getPrivacyNoticeText(){
@@ -217,14 +217,38 @@ const BRAND_ID = new URLSearchParams(window.location.search).get("brand") || "";
 
 /* =========================================================
    質問データの読み込み(Google Apps Script経由でスプレッドシートから取得)
+   ------------------------------------------------------
+   ・1回の通信は10秒でタイムアウトさせる(AbortController)
+   ・失敗したら1〜2回まで自動で再試行する(合計最大3回)
+   ・すべて失敗したら、呼び出し元(boot)でエラー画面を表示する
 ========================================================= */
-async function loadQuestions(){
+const LOAD_TIMEOUT_MS = 10000;
+const LOAD_MAX_RETRIES = 2; // 初回 + 最大2回の再試行 = 最大3回試行
+
+function fetchWithTimeout(url, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { method: "GET", signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+async function loadQuestionsOnce(){
   if(!CONFIG.gasWebAppUrl){
     throw new Error("gas-not-configured");
   }
   const url = CONFIG.gasWebAppUrl + "?brand=" + encodeURIComponent(BRAND_ID);
-  const res = await fetch(url, { method: "GET" });
-  const json = await res.json();
+  let res;
+  try{
+    res = await fetchWithTimeout(url, LOAD_TIMEOUT_MS);
+  }catch(err){
+    if(err.name === "AbortError") throw new Error("timeout");
+    throw new Error("network");
+  }
+  let json;
+  try{
+    json = await res.json();
+  }catch(err){
+    throw new Error("invalid-response");
+  }
   if(!json || json.status !== "ok" || !Array.isArray(json.questions) || json.questions.length === 0){
     throw new Error((json && json.message) || "no-questions");
   }
@@ -234,6 +258,24 @@ async function loadQuestions(){
     tip: q.tip || "",
     answerExample: q.answerExample || ""
   }));
+}
+
+/* 呼び出し元にリアルタイムで状況を伝えるため、進捗コールバックを受け取る */
+async function loadQuestions(onAttempt){
+  let lastErr;
+  for(let attempt = 1; attempt <= LOAD_MAX_RETRIES + 1; attempt++){
+    if(onAttempt) onAttempt(attempt);
+    try{
+      return await loadQuestionsOnce();
+    }catch(err){
+      lastErr = err;
+      console.error(`質問の読み込みに失敗しました(試行 ${attempt}/${LOAD_MAX_RETRIES + 1})`, err);
+      if(attempt <= LOAD_MAX_RETRIES){
+        await new Promise(r => setTimeout(r, 800 * attempt)); // 少し間隔をあけて再試行
+      }
+    }
+  }
+  throw lastErr;
 }
 
 /* =========================================================
@@ -765,38 +807,60 @@ async function renderHistoryDetail(){
 /* =========================================================
    起動
 ========================================================= */
-function renderLoading(){
+function renderLoading(showRetryButton){
   app.innerHTML = `
     <div class="accent-bar"></div>
     <div class="logo-mark">👗</div>
     <h1>アパレル面談練習</h1>
     <p class="muted center">質問を読み込んでいます…</p>
+    ${showRetryButton ? `
+      <p class="muted center" style="margin-top:8px;">通信に時間がかかっています</p>
+      <button class="btn btn-primary" id="retry-load-btn">再読み込み</button>
+    ` : ""}
   `;
+  const btn = document.getElementById("retry-load-btn");
+  if(btn) btn.onclick = () => boot();
 }
 
 function renderLoadError(reason){
   const messages = {
     "gas-not-configured": "質問データの取得先が設定されていません。管理者にご確認ください。",
-    "no-questions": "この専用URLに対応する質問が見つかりませんでした。URLが正しいか、管理者にご確認ください。"
+    "no-questions": "この専用URLに対応する質問が見つかりませんでした。URLが正しいか、管理者にご確認ください。",
+    "timeout": "通信エラーが発生しました。もう一度お試しください。",
+    "network": "通信エラーが発生しました。もう一度お試しください。",
+    "invalid-response": "通信エラーが発生しました。もう一度お試しください。"
   };
   app.innerHTML = `
     <div class="accent-bar"></div>
     <div class="logo-mark">👗</div>
     <h1>アパレル面談練習</h1>
-    <div class="warn-box">${messages[reason] || "質問の読み込みに失敗しました。通信状況をご確認のうえ、もう一度お試しください。"}</div>
+    <div class="warn-box">${messages[reason] || "通信エラーが発生しました。もう一度お試しください。"}</div>
     <button class="btn btn-primary" id="retry-load-btn">もう一度読み込む</button>
   `;
-  document.getElementById("retry-load-btn").onclick = boot;
+  document.getElementById("retry-load-btn").onclick = () => boot();
 }
 
 async function boot(){
-  renderLoading();
+  renderLoading(false);
   await refreshFlags();
+
+  // 10秒経っても結果が出ていなければ、「読み込み中」画面に再読み込みボタンを足す
+  // (loadQuestions自体は1回10秒でタイムアウト・自動再試行するため、
+  //  この表示はユーザーへの安心材料であり、処理自体は裏で継続している)
+  let settled = false;
+  const slowTimer = setTimeout(() => {
+    if(!settled) renderLoading(true);
+  }, 10000);
+
   try{
     DATA.questions = await loadQuestions();
+    settled = true;
+    clearTimeout(slowTimer);
     render();
   }catch(err){
-    console.error("loadQuestions failed", err);
+    settled = true;
+    clearTimeout(slowTimer);
+    console.error("質問の読み込みが最終的に失敗しました", err);
     renderLoadError(err && err.message);
   }
 }
