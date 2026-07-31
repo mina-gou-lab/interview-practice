@@ -176,7 +176,7 @@ const DATA = {
 ========================================================= */
 const CONFIG = {
   cloudEnabled: true,
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec" 
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
 };
 
 function getPrivacyNoticeText(){
@@ -841,7 +841,16 @@ async function submitSessionToCloud(session){
   if(!json || json.status !== "ok"){
     throw new Error((json && json.message) || "unknown error");
   }
-  return { feedback: json.feedback || null };
+  return { feedback: normalizeFeedback(json.feedback) };
+}
+
+/* GASからは perQuestion が配列([{questionId, goodPoints, improvementPoints, sampleAnswer}, ...])で
+   返ってくる。画面表示側は質問IDで直接引ける形の方が扱いやすいので、辞書形式に変換しておく。 */
+function normalizeFeedback(feedback){
+  if(!feedback || !Array.isArray(feedback.perQuestion)) return null;
+  const perQuestion = {};
+  feedback.perQuestion.forEach(f => { perQuestion[f.questionId] = f; });
+  return { perQuestion };
 }
 
 /* ------------------------- 過去の練習一覧 ------------------------- */
