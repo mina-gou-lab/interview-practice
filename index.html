@@ -110,6 +110,7 @@
   .example-box p{ margin:0; font-size:13px; line-height:1.7; color:var(--teal-900); }
 
   .q-card{ background:var(--teal-50); border-radius:16px; padding:13px 15px; margin-bottom:10px; }
+  .ai-feedback-box{ background:var(--card); border:1px dashed var(--coral-300); border-radius:12px; padding:10px 12px; margin-top:10px; font-size:13px; line-height:1.7; }
   .q-label{ font-size:12px; color:var(--text-muted); margin:0 0 6px; font-weight:600; }
   .answer-text{ font-size:13px; line-height:1.7; margin:0; }
   audio{ width:100%; height:34px; margin-top:6px; }
@@ -170,7 +171,7 @@ const DATA = {
 ========================================================= */
 const CONFIG = {
   cloudEnabled: true,
-  gasWebAppUrl:  "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
 };
 
 function getPrivacyNoticeText(){
@@ -399,7 +400,8 @@ let state = {
   hasDraft: false,
   lastSavedNotice: false,
   viewingSessionId: null,
-  submitStatus: "idle"   // idle | sending | success | error
+  submitStatus: "idle",  // idle | sending | success | error
+  aiFeedback: { status: "idle", perQuestion: {}, overallComment: "" } // idle | loading | success | error
 };
 
 const app = document.getElementById("app");
@@ -679,10 +681,19 @@ async function finishAndSave(){
   await refreshFlags();
 
   const willAutoSubmit = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
-  setState({ screen:"review", lastSavedNotice: saved, submitStatus: willAutoSubmit ? "sending" : "idle" });
+  const willRequestFeedback = !!CONFIG.gasWebAppUrl;
+  setState({
+    screen:"review",
+    lastSavedNotice: saved,
+    submitStatus: willAutoSubmit ? "sending" : "idle",
+    aiFeedback: willRequestFeedback ? { status:"loading", perQuestion:{}, overallComment:"" } : { status:"idle", perQuestion:{}, overallComment:"" }
+  });
 
   if(willAutoSubmit){
     submitToStaff(); // 「終了する」と同時に自動送信。結果は振り返り画面に随時反映される
+  }
+  if(willRequestFeedback){
+    requestAiFeedback(session.answers); // AIフィードバックも並行して取得。結果は振り返り画面に随時反映される
   }
 }
 
@@ -701,6 +712,17 @@ function renderReview(){
     }
   }
 
+  let aiOverallHtml = "";
+  if(CONFIG.gasWebAppUrl){
+    if(state.aiFeedback.status === "loading"){
+      aiOverallHtml = `<p class="muted center" style="margin:0 0 12px;">🤖 AIが回答を確認しています…</p>`;
+    } else if(state.aiFeedback.status === "error"){
+      aiOverallHtml = `<div class="warn-box">AIフィードバックの取得に失敗しました。通信状況をご確認のうえ、<a href="#" id="retry-feedback-link">もう一度試す</a>をお試しください。</div>`;
+    } else if(state.aiFeedback.status === "success" && state.aiFeedback.overallComment){
+      aiOverallHtml = `<div class="note-box">🤖 <strong>AIからの総評</strong><br>${state.aiFeedback.overallComment}</div>`;
+    }
+  }
+
   app.innerHTML = `
     <h2>今日の練習 🎉</h2>
     <p class="muted center" style="margin-top:-10px;">全 ${DATA.questions.length} 問・お疲れ様でした</p>
@@ -708,13 +730,16 @@ function renderReview(){
       ? `<div class="note-box">${getSavedConfirmationText()}</div>`
       : `<div class="warn-box">保存に失敗しました(このセッション内でのみ確認できます)。</div>`}
     ${cloudStatusHtml}
+    ${aiOverallHtml}
     ${DATA.questions.map((q,i) => {
       const a = state.answers[i] || {};
       let body = "";
       if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
       if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
       if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
-      return `<div class="q-card"><p class="q-label">${i+1}. ${q.text}</p>${body}</div>`;
+      const fb = state.aiFeedback.perQuestion[q.id];
+      const fbHtml = fb ? `<div class="ai-feedback-box">🤖 ${fb}</div>` : "";
+      return `<div class="q-card"><p class="q-label">${i+1}. ${q.text}</p>${body}${fbHtml}</div>`;
     }).join("")}
     <div style="height:6px;"></div>
     <div class="stack">
@@ -726,8 +751,20 @@ function renderReview(){
   if(retryLink){
     retryLink.onclick = (e) => { e.preventDefault(); submitToStaff(); };
   }
+  const retryFeedbackLink = document.getElementById("retry-feedback-link");
+  if(retryFeedbackLink){
+    retryFeedbackLink.onclick = (e) => {
+      e.preventDefault();
+      setState({ aiFeedback: { status:"loading", perQuestion:{}, overallComment:"" } });
+      requestAiFeedback(DATA.questions.map((q,i) => {
+        const a = state.answers[i] || {};
+        return { questionId:q.id, questionText:q.text, text:a.text || null, audioDataUrl:a.audioDataUrl || null };
+      }));
+    };
+  }
   document.getElementById("restart-btn").onclick = () => setState({
-    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false, submitStatus:"idle"
+    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false, submitStatus:"idle",
+    aiFeedback: { status:"idle", perQuestion:{}, overallComment:"" }
   });
   document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false, submitStatus:"idle" });
 }
@@ -765,6 +802,38 @@ async function submitToStaff(){
   }catch(err){
     console.error("submitToStaff failed", err);
     setState({ submitStatus: "error" });
+  }
+}
+
+/* ------------------------- AIフィードバックの取得(Google Apps Script経由でGemini APIを呼ぶ) ------------------------- */
+async function requestAiFeedback(answers){
+  const payload = {
+    action: "feedback",
+    id: SESSION_ID,
+    answers: answers.map(a => ({
+      questionId: a.questionId,
+      questionText: a.questionText,
+      text: a.text || "",
+      audioDataUrl: a.audioDataUrl || null
+    }))
+  };
+  try{
+    const res = await fetch(CONFIG.gasWebAppUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if(json && json.status === "ok" && json.feedback){
+      const perQuestion = {};
+      (json.feedback.perQuestion || []).forEach(f => { perQuestion[f.questionId] = f.feedback; });
+      setState({ aiFeedback: { status:"success", perQuestion, overallComment: json.feedback.overallComment || "" } });
+    } else {
+      throw new Error((json && json.message) || "unknown error");
+    }
+  }catch(err){
+    console.error("requestAiFeedback failed", err);
+    setState({ aiFeedback: { status:"error", perQuestion:{}, overallComment:"" } });
   }
 }
 
