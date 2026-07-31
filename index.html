@@ -796,12 +796,16 @@ function renderAnswerCard(number, a, aiFeedback){
   if(fb){
     const good = (fb.goodPoints || []).map(p => `<li>${p}</li>`).join("");
     const improve = (fb.improvementPoints || []).map(p => `<li>${p}</li>`).join("");
+    const etiquette = (fb.etiquetteNotes || []).map(p => `<li>${p}</li>`).join("");
+    const missing = (fb.missingElements || []).map(p => `<li>${p}</li>`).join("");
     fbHtml = `
       <div class="ai-feedback-box">
         <p class="ai-feedback-title">🤖 AIからのフィードバック</p>
         ${good ? `<p class="ai-feedback-label">良かった点</p><ul class="ai-feedback-list">${good}</ul>` : ""}
         ${improve ? `<p class="ai-feedback-label">改善点</p><ul class="ai-feedback-list">${improve}</ul>` : ""}
+        ${etiquette ? `<p class="ai-feedback-label">面接マナー・言葉遣い</p><ul class="ai-feedback-list">${etiquette}</ul>` : ""}
         ${fb.sampleAnswer ? `<p class="ai-feedback-label">回答例</p><p class="ai-feedback-sample">${fb.sampleAnswer}</p>` : ""}
+        ${missing ? `<p class="ai-feedback-label">さらに良くするために追加すると良い内容</p><ul class="ai-feedback-list">${missing}</ul>` : ""}
       </div>
     `;
   }
