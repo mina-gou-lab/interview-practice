@@ -791,7 +791,9 @@ function renderAnswerCard(number, a, aiFeedback){
   if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
   if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
 
-  const fb = aiFeedback && aiFeedback.perQuestion ? aiFeedback.perQuestion[a.questionId] : null;
+  const byId = aiFeedback && aiFeedback.perQuestion ? aiFeedback.perQuestion[a.questionId] : null;
+  const byPosition = aiFeedback && aiFeedback.perQuestionArray ? aiFeedback.perQuestionArray[number - 1] : null;
+  const fb = byId || byPosition || null;
   let fbHtml = "";
   if(fb){
     const good = (fb.goodPoints || []).map(p => `<li>${p}</li>`).join("");
@@ -849,12 +851,15 @@ async function submitSessionToCloud(session){
 }
 
 /* GASからは perQuestion が配列([{questionId, goodPoints, improvementPoints, sampleAnswer}, ...])で
-   返ってくる。画面表示側は質問IDで直接引ける形の方が扱いやすいので、辞書形式に変換しておく。 */
+   返ってくる。画面表示側は質問IDで直接引ける形の方が扱いやすいので、辞書形式に変換しておく。
+   あわせて、元の並び順の配列も保持しておく。
+   (音声のみの回答は、Geminiがquestion Idを正確に復唱できず、表記が微妙にズレて
+    返ってくることがまれにあるため、その場合は「送った順番」で対応づける保険にする) */
 function normalizeFeedback(feedback){
   if(!feedback || !Array.isArray(feedback.perQuestion)) return null;
   const perQuestion = {};
   feedback.perQuestion.forEach(f => { perQuestion[f.questionId] = f; });
-  return { perQuestion };
+  return { perQuestion, perQuestionArray: feedback.perQuestion };
 }
 
 /* ------------------------- 過去の練習一覧 ------------------------- */
