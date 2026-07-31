@@ -111,6 +111,11 @@
 
   .q-card{ background:var(--teal-50); border-radius:16px; padding:13px 15px; margin-bottom:10px; }
   .ai-feedback-box{ background:var(--card); border:1px dashed var(--coral-300); border-radius:12px; padding:10px 12px; margin-top:10px; font-size:13px; line-height:1.7; }
+  .ai-feedback-title{ font-weight:700; margin:0 0 6px; }
+  .ai-feedback-label{ font-weight:600; font-size:12px; color:var(--text-muted); margin:8px 0 2px; }
+  .ai-feedback-list{ margin:0 0 4px; padding-left:1.2em; }
+  .ai-feedback-list li{ margin-bottom:2px; }
+  .ai-feedback-sample{ margin:0; background:var(--teal-50); border-radius:10px; padding:8px 10px; }
   .q-label{ font-size:12px; color:var(--text-muted); margin:0 0 6px; font-weight:600; }
   .answer-text{ font-size:13px; line-height:1.7; margin:0; }
   audio{ width:100%; height:34px; margin-top:6px; }
@@ -171,7 +176,7 @@ const DATA = {
 ========================================================= */
 const CONFIG = {
   cloudEnabled: true,
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec" 
 };
 
 function getPrivacyNoticeText(){
@@ -226,10 +231,11 @@ const BRAND_ID = new URLSearchParams(window.location.search).get("brand") || "";
 const LOAD_TIMEOUT_MS = 10000;
 const LOAD_MAX_RETRIES = 2; // 初回 + 最大2回の再試行 = 最大3回試行
 
-function fetchWithTimeout(url, timeoutMs){
+function fetchWithTimeout(url, timeoutMs, options){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { method: "GET", signal: controller.signal }).finally(() => clearTimeout(timer));
+  const fetchOptions = Object.assign({ method: "GET" }, options || {}, { signal: controller.signal });
+  return fetch(url, fetchOptions).finally(() => clearTimeout(timer));
 }
 
 async function loadQuestionsOnce(attemptLabel){
@@ -355,6 +361,18 @@ const Storage = {
     const sessions = await Storage.list();
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.filter(s => s.id !== sessionId)));
   },
+  // 保存済みのセッションを、同じIDのまま中身だけ差し替える(AIフィードバックの再取得成功時などに使う)
+  async updateSession(updatedSession){
+    if(!SUPPORT.localStorage) return false;
+    try{
+      const sessions = await Storage.list();
+      const idx = sessions.findIndex(s => s.id === updatedSession.id);
+      if(idx === -1) return false;
+      sessions[idx] = updatedSession;
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+      return true;
+    }catch(e){ console.error("Storage.updateSession failed", e); return false; }
+  },
   async saveDraft(draft){
     if(!SUPPORT.localStorage) return false;
     try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); return true; }
@@ -391,7 +409,7 @@ function debounce(fn, delay){
    アプリの状態
 ========================================================= */
 let state = {
-  screen: "top",        // top | tips | practice | review | history | historyDetail
+  screen: "top",        // top | tips | practice | review | history | historyDetail | finishing
   qIndex: 0,
   showExample: false,
   answers: [],           // {text, audioDataUrl} ※どちらか一方でも両方でも可
@@ -400,8 +418,8 @@ let state = {
   hasDraft: false,
   lastSavedNotice: false,
   viewingSessionId: null,
-  submitStatus: "idle",  // idle | sending | success | error
-  aiFeedback: { status: "idle", perQuestion: {}, overallComment: "" } // idle | loading | success | error
+  cloudStatus: "idle",   // idle | sending | success | error(回答送信+AIフィードバック取得をまとめた状態)
+  reviewSession: null    // 振り返り画面に表示するセッション({answers, aiFeedback}) — 練習直後・過去の記録の閲覧どちらでも共通で使う
 };
 
 const app = document.getElementById("app");
@@ -423,6 +441,7 @@ function render(){
   if(state.screen === "top") return renderTop();
   if(state.screen === "tips") return renderTips();
   if(state.screen === "practice") return renderPractice();
+  if(state.screen === "finishing") return renderFinishing();
   if(state.screen === "review") return renderReview();
   if(state.screen === "history") return renderHistory();
   if(state.screen === "historyDetail") return renderHistoryDetail();
@@ -674,53 +693,56 @@ async function finishAndSave(){
         text: a.text || null,
         audioDataUrl: a.audioDataUrl || null
       };
-    })
+    }),
+    aiFeedback: null // {perQuestion: {questionId: {goodPoints, improvementPoints, sampleAnswer}}}
   };
-  const saved = await Storage.save(session);
-  await Storage.clearDraft();
-  await refreshFlags();
 
-  const willAutoSubmit = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
-  const willRequestFeedback = !!CONFIG.gasWebAppUrl;
-  setState({
-    screen:"review",
-    lastSavedNotice: saved,
-    submitStatus: willAutoSubmit ? "sending" : "idle",
-    aiFeedback: willRequestFeedback ? { status:"loading", perQuestion:{}, overallComment:"" } : { status:"idle", perQuestion:{}, overallComment:"" }
-  });
+  const shouldSubmit = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
 
-  if(willAutoSubmit){
-    submitToStaff(); // 「終了する」と同時に自動送信。結果は振り返り画面に随時反映される
-  }
-  if(willRequestFeedback){
-    requestAiFeedback(session.answers); // AIフィードバックも並行して取得。結果は振り返り画面に随時反映される
+  if(shouldSubmit){
+    // 送信中は専用の画面を挟む。ただし何が起きても(成功/失敗どちらでも)
+    // 必ずこの後の保存・振り返り表示まで進む(止まったままにはしない)
+    setState({ screen:"finishing" });
+    let cloudStatus = "error";
+    try{
+      const result = await submitSessionToCloud(session);
+      session.aiFeedback = result.feedback || null;
+      cloudStatus = "success";
+    }catch(err){
+      console.error("submitSessionToCloud failed", err);
+      cloudStatus = "error";
+    }
+    const saved = await Storage.save(session);
+    await Storage.clearDraft();
+    await refreshFlags();
+    setState({ screen:"review", lastSavedNotice: saved, cloudStatus, reviewSession: session });
+  } else {
+    const saved = await Storage.save(session);
+    await Storage.clearDraft();
+    await refreshFlags();
+    setState({ screen:"review", lastSavedNotice: saved, cloudStatus:"idle", reviewSession: session });
   }
 }
 
-/* ------------------------- 振り返り(直後) ------------------------- */
+function renderFinishing(){
+  app.innerHTML = `
+    <div class="accent-bar"></div>
+    <div class="logo-mark">👗</div>
+    <h1>アパレル面談練習</h1>
+    <p class="muted center">🤖 AIが回答を確認しています…</p>
+  `;
+}
+
+/* ------------------------- 振り返り(直後・過去の記録どちらも共通で使う) ------------------------- */
 function renderReview(){
-  const autoSubmitting = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
+  const session = state.reviewSession;
+  const showCloudBanner = state.cloudStatus !== "idle";
 
   let cloudStatusHtml = "";
-  if(autoSubmitting){
-    if(state.submitStatus === "sending"){
-      cloudStatusHtml = `<p class="muted center" style="margin:0 0 12px;">担当者への送信中…</p>`;
-    } else if(state.submitStatus === "success"){
-      cloudStatusHtml = `<div class="note-box">✓ 担当者に送信しました。面談準備のサポートを目的として、担当者がこの内容を確認する場合があります。</div>`;
-    } else if(state.submitStatus === "error"){
-      cloudStatusHtml = `<div class="warn-box">担当者への送信に失敗しました。通信状況をご確認のうえ、<a href="#" id="retry-submit-link">もう一度送信する</a>をお試しください。</div>`;
-    }
-  }
-
-  let aiOverallHtml = "";
-  if(CONFIG.gasWebAppUrl){
-    if(state.aiFeedback.status === "loading"){
-      aiOverallHtml = `<p class="muted center" style="margin:0 0 12px;">🤖 AIが回答を確認しています…</p>`;
-    } else if(state.aiFeedback.status === "error"){
-      aiOverallHtml = `<div class="warn-box">AIフィードバックの取得に失敗しました。通信状況をご確認のうえ、<a href="#" id="retry-feedback-link">もう一度試す</a>をお試しください。</div>`;
-    } else if(state.aiFeedback.status === "success" && state.aiFeedback.overallComment){
-      aiOverallHtml = `<div class="note-box">🤖 <strong>AIからの総評</strong><br>${state.aiFeedback.overallComment}</div>`;
-    }
+  if(state.cloudStatus === "success"){
+    cloudStatusHtml = `<div class="note-box">✓ 担当者に送信しました。面談準備のサポートを目的として、担当者がこの内容を確認する場合があります。</div>`;
+  } else if(state.cloudStatus === "error"){
+    cloudStatusHtml = `<div class="warn-box">担当者への送信、またはAIフィードバックの取得に失敗しました。通信状況をご確認のうえ、<a href="#" id="retry-submit-link">もう一度試す</a>をお試しください。</div>`;
   }
 
   app.innerHTML = `
@@ -729,18 +751,8 @@ function renderReview(){
     ${state.lastSavedNotice
       ? `<div class="note-box">${getSavedConfirmationText()}</div>`
       : `<div class="warn-box">保存に失敗しました(このセッション内でのみ確認できます)。</div>`}
-    ${cloudStatusHtml}
-    ${aiOverallHtml}
-    ${DATA.questions.map((q,i) => {
-      const a = state.answers[i] || {};
-      let body = "";
-      if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
-      if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
-      if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
-      const fb = state.aiFeedback.perQuestion[q.id];
-      const fbHtml = fb ? `<div class="ai-feedback-box">🤖 ${fb}</div>` : "";
-      return `<div class="q-card"><p class="q-label">${i+1}. ${q.text}</p>${body}${fbHtml}</div>`;
-    }).join("")}
+    ${showCloudBanner ? cloudStatusHtml : ""}
+    ${session.answers.map((a,i) => renderAnswerCard(i+1, a, session.aiFeedback)).join("")}
     <div style="height:6px;"></div>
     <div class="stack">
       <button class="btn btn-primary" id="restart-btn">もう一度練習する</button>
@@ -749,92 +761,87 @@ function renderReview(){
   `;
   const retryLink = document.getElementById("retry-submit-link");
   if(retryLink){
-    retryLink.onclick = (e) => { e.preventDefault(); submitToStaff(); };
-  }
-  const retryFeedbackLink = document.getElementById("retry-feedback-link");
-  if(retryFeedbackLink){
-    retryFeedbackLink.onclick = (e) => {
+    retryLink.onclick = async (e) => {
       e.preventDefault();
-      setState({ aiFeedback: { status:"loading", perQuestion:{}, overallComment:"" } });
-      requestAiFeedback(DATA.questions.map((q,i) => {
-        const a = state.answers[i] || {};
-        return { questionId:q.id, questionText:q.text, text:a.text || null, audioDataUrl:a.audioDataUrl || null };
-      }));
+      setState({ screen:"finishing" });
+      let cloudStatus = "error";
+      try{
+        const result = await submitSessionToCloud(session);
+        session.aiFeedback = result.feedback || null;
+        cloudStatus = "success";
+      }catch(err){
+        console.error("submitSessionToCloud retry failed", err);
+        cloudStatus = "error";
+      }
+      await Storage.updateSession(session); // 再試行で取得できたフィードバックを保存済みの記録にも反映
+      setState({ screen:"review", cloudStatus, reviewSession: session });
     };
   }
   document.getElementById("restart-btn").onclick = () => setState({
-    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false, submitStatus:"idle",
-    aiFeedback: { status:"idle", perQuestion:{}, overallComment:"" }
+    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false, cloudStatus:"idle", reviewSession:null
   });
-  document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false, submitStatus:"idle" });
+  document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false, cloudStatus:"idle", reviewSession:null });
 }
 
-/* ------------------------- スタッフへの送信(Google Apps Script) ------------------------- */
-async function submitToStaff(){
-  setState({ submitStatus: "sending" });
-  const payload = {
-    id: SESSION_ID,
-    submittedAt: new Date().toISOString(),
-    answers: DATA.questions.map((q, i) => {
-      const a = state.answers[i] || {};
-      return {
-        questionId: q.id,
-        questionText: q.text,
-        text: a.text || "",
-        audioDataUrl: a.audioDataUrl || null
-      };
-    })
-  };
-  try{
-    // GASのWebアプリはContent-Type: application/jsonだとCORSで弾かれることがあるため、
-    // text/plainで送り、GAS側でJSON.parseする方式にしている(GAS連携の定番の回避策)
-    const res = await fetch(CONFIG.gasWebAppUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
-    });
-    const json = await res.json();
-    if(json && json.status === "ok"){
-      setState({ submitStatus: "success" });
-    } else {
-      throw new Error((json && json.message) || "unknown error");
-    }
-  }catch(err){
-    console.error("submitToStaff failed", err);
-    setState({ submitStatus: "error" });
+/* 「①あなたの回答 ②AIからのフィードバック ③回答例」の3点を1つのカードにまとめて表示する。
+   振り返り画面(直後)・過去の記録の詳細、両方から呼ばれる共通パーツ。 */
+function renderAnswerCard(number, a, aiFeedback){
+  let body = "";
+  if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
+  if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
+  if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
+
+  const fb = aiFeedback && aiFeedback.perQuestion ? aiFeedback.perQuestion[a.questionId] : null;
+  let fbHtml = "";
+  if(fb){
+    const good = (fb.goodPoints || []).map(p => `<li>${p}</li>`).join("");
+    const improve = (fb.improvementPoints || []).map(p => `<li>${p}</li>`).join("");
+    fbHtml = `
+      <div class="ai-feedback-box">
+        <p class="ai-feedback-title">🤖 AIからのフィードバック</p>
+        ${good ? `<p class="ai-feedback-label">良かった点</p><ul class="ai-feedback-list">${good}</ul>` : ""}
+        ${improve ? `<p class="ai-feedback-label">改善点</p><ul class="ai-feedback-list">${improve}</ul>` : ""}
+        ${fb.sampleAnswer ? `<p class="ai-feedback-label">回答例</p><p class="ai-feedback-sample">${fb.sampleAnswer}</p>` : ""}
+      </div>
+    `;
   }
+
+  return `<div class="q-card"><p class="q-label">${number}. ${a.questionText}</p>${body}${fbHtml}</div>`;
 }
 
-/* ------------------------- AIフィードバックの取得(Google Apps Script経由でGemini APIを呼ぶ) ------------------------- */
-async function requestAiFeedback(answers){
+/* ------------------------- 回答送信+AIフィードバック取得(Google Apps Script経由、1回の通信でまとめて行う) ------------------------- */
+const SUBMIT_TIMEOUT_MS = 25000; // Gemini API呼び出しを含むため、質問読み込みより長めに設定
+
+async function submitSessionToCloud(session){
   const payload = {
-    action: "feedback",
     id: SESSION_ID,
-    answers: answers.map(a => ({
+    brand: BRAND_ID,
+    submittedAt: session.createdAt,
+    answers: session.answers.map(a => ({
       questionId: a.questionId,
       questionText: a.questionText,
       text: a.text || "",
       audioDataUrl: a.audioDataUrl || null
     }))
   };
+  let res;
   try{
-    const res = await fetch(CONFIG.gasWebAppUrl, {
+    // GASのWebアプリはContent-Type: application/jsonだとCORSで弾かれることがあるため、
+    // text/plainで送り、GAS側でJSON.parseする方式にしている(GAS連携の定番の回避策)
+    res = await fetchWithTimeout(CONFIG.gasWebAppUrl, SUBMIT_TIMEOUT_MS, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
     });
-    const json = await res.json();
-    if(json && json.status === "ok" && json.feedback){
-      const perQuestion = {};
-      (json.feedback.perQuestion || []).forEach(f => { perQuestion[f.questionId] = f.feedback; });
-      setState({ aiFeedback: { status:"success", perQuestion, overallComment: json.feedback.overallComment || "" } });
-    } else {
-      throw new Error((json && json.message) || "unknown error");
-    }
   }catch(err){
-    console.error("requestAiFeedback failed", err);
-    setState({ aiFeedback: { status:"error", perQuestion:{}, overallComment:"" } });
+    if(err.name === "AbortError") throw new Error("timeout");
+    throw err;
   }
+  const json = await res.json();
+  if(!json || json.status !== "ok"){
+    throw new Error((json && json.message) || "unknown error");
+  }
+  return { feedback: json.feedback || null };
 }
 
 /* ------------------------- 過去の練習一覧 ------------------------- */
@@ -892,13 +899,7 @@ async function renderHistoryDetail(){
   app.innerHTML = `
     <h2>練習の記録</h2>
     <p class="muted center" style="margin-top:-10px; margin-bottom:16px;">${formatDate(session.createdAt)}</p>
-    ${session.answers.map((a,i) => {
-      let body = "";
-      if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
-      if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
-      if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
-      return `<div class="q-card"><p class="q-label">${i+1}. ${a.questionText}</p>${body}</div>`;
-    }).join("")}
+    ${session.answers.map((a,i) => renderAnswerCard(i+1, a, session.aiFeedback)).join("")}
     <div style="height:6px;"></div>
     <button class="btn" id="back-btn">一覧に戻る</button>
   `;
