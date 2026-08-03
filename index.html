@@ -825,6 +825,7 @@ async function submitSessionToCloud(session){
   const payload = {
     id: SESSION_ID,
     brand: BRAND_ID,
+    submissionId: session.id, // このセッション固有のID。再試行時も同じ値なので、GAS側で重複防止に使う
     submittedAt: session.createdAt,
     answers: session.answers.map(a => ({
       questionId: a.questionId,
