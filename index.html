@@ -819,7 +819,7 @@ function renderAnswerCard(number, a, aiFeedback){
 }
 
 /* ------------------------- 回答送信+AIフィードバック取得(Google Apps Script経由、1回の通信でまとめて行う) ------------------------- */
-const SUBMIT_TIMEOUT_MS = 60000; // Gemini API呼び出し(複数の音声回答を含む場合は特に時間がかかる)を考慮して長めに設定
+const SUBMIT_TIMEOUT_MS = 90000; // GAS内部の処理(48秒前後の実績あり)+通信往復の余裕を見て長めに設定
 
 async function submitSessionToCloud(session){
   const payload = {
