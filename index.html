@@ -703,6 +703,7 @@ async function finishAndSave(){
     // 送信中は専用の画面を挟む。ただし何が起きても(成功/失敗どちらでも)
     // 必ずこの後の保存・振り返り表示まで進む(止まったままにはしない)
     setState({ screen:"finishing" });
+    const slowTimer = setTimeout(() => renderFinishing(true), 15000); // 15秒経ったら「時間がかかっています」を追加表示
     let cloudStatus = "error";
     try{
       const result = await submitSessionToCloud(session);
@@ -712,6 +713,7 @@ async function finishAndSave(){
       console.error("submitSessionToCloud failed", err);
       cloudStatus = "error";
     }
+    clearTimeout(slowTimer);
     const saved = await Storage.save(session);
     await Storage.clearDraft();
     await refreshFlags();
@@ -724,12 +726,13 @@ async function finishAndSave(){
   }
 }
 
-function renderFinishing(){
+function renderFinishing(showSlowNotice){
   app.innerHTML = `
     <div class="accent-bar"></div>
     <div class="logo-mark">👗</div>
     <h1>アパレル面談練習</h1>
     <p class="muted center">🤖 AIが回答を確認しています…</p>
+    ${showSlowNotice ? `<p class="muted center" style="margin-top:8px;">録音の内容を確認しているため、少し時間がかかっています。そのままお待ちください。</p>` : ""}
   `;
 }
 
@@ -816,7 +819,7 @@ function renderAnswerCard(number, a, aiFeedback){
 }
 
 /* ------------------------- 回答送信+AIフィードバック取得(Google Apps Script経由、1回の通信でまとめて行う) ------------------------- */
-const SUBMIT_TIMEOUT_MS = 25000; // Gemini API呼び出しを含むため、質問読み込みより長めに設定
+const SUBMIT_TIMEOUT_MS = 60000; // Gemini API呼び出し(複数の音声回答を含む場合は特に時間がかかる)を考慮して長めに設定
 
 async function submitSessionToCloud(session){
   const payload = {
