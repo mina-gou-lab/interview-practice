@@ -721,40 +721,33 @@ async function runCloudFlow(session){
     return "error"; 
   }
 
-  const results = await Promise.all(session.answers.map((a, idx) =>
-    requestFeedbackForOneQuestion(session, a, idx)
-      .then(feedback => {
-        progress[idx] = { questionId: a.questionId, status: "done" };
-        setState({ feedbackProgress: [...progress] });
-        return { questionId: a.questionId, ok: true, feedback };
-      })
-      .catch(err => {
-        // ①コンソールへエラー詳細を出力
-        console.error(`[Q${idx + 1}] ❌ エラー発生`);
-        console.error(`  - 失敗した処理(stage): ${err.stage || "不明"}`);
-        console.error(`  - HTTPステータス: ${err.httpStatus || "なし"}`);
-        console.error(`  - Geminiエラー内容: ${err.geminiMessage || "なし"}`);
-        console.error(`  - 詳細メッセージ: ${err.message}`);
-        
-        // エラー詳細を進捗表示に渡す
-        progress[idx] = { 
-          questionId: a.questionId, 
-          status: "error", 
-          category: err.category,
-          httpStatus: err.httpStatus
-        };
-        setState({ feedbackProgress: [...progress] });
-        return { questionId: a.questionId, ok: false, feedback: null };
-      })
-  ));
-
   const perQuestion = {};
   let anySuccess = false;
-  results.forEach(r => {
-    if(r.ok){ perQuestion[r.questionId] = r.feedback; anySuccess = true; }
-  });
-  session.aiFeedback = { perQuestion };
 
+  // Promise.all(並列処理)をやめて、for文で1問ずつ順番(直列)に処理する
+  for (let idx = 0; idx < session.answers.length; idx++) {
+    const a = session.answers[idx];
+    try {
+      const feedback = await requestFeedbackForOneQuestion(session, a, idx);
+      progress[idx] = { questionId: a.questionId, status: "done" };
+      setState({ feedbackProgress: [...progress] });
+      perQuestion[a.questionId] = feedback;
+      anySuccess = true;
+    } catch(err) {
+      console.error(`[Q${idx + 1}] ❌ エラー発生`);
+      console.error(`  - 詳細メッセージ: ${err.message}`);
+      
+      progress[idx] = { 
+        questionId: a.questionId, 
+        status: "error", 
+        category: err.category,
+        httpStatus: err.httpStatus
+      };
+      setState({ feedbackProgress: [...progress] });
+    }
+  }
+
+  session.aiFeedback = { perQuestion };
   return anySuccess ? "success" : "error";
 }
 
