@@ -724,8 +724,15 @@ async function runCloudFlow(session){
   const perQuestion = {};
   let anySuccess = false;
 
-  // Promise.all(並列処理)をやめて、for文で1問ずつ順番(直列)に処理する
+  // 1問ずつ順番(直列)に処理する
   for (let idx = 0; idx < session.answers.length; idx++) {
+    
+    // ★追加：2問目以降は、APIの連続アクセス制限を避けるために5秒待機する
+    if (idx > 0) {
+      console.log(`[Q${idx + 1}] API制限回避のため5秒待機します...`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
     const a = session.answers[idx];
     try {
       const feedback = await requestFeedbackForOneQuestion(session, a, idx);
