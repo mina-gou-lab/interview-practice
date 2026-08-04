@@ -875,8 +875,8 @@ function renderAnswerCard(number, a, aiFeedback){
 }
 
 /* ------------------------- クラウドとの通信(GAS) ------------------------- */
-const SAVE_TIMEOUT_MS = 30000;
-const FEEDBACK_TIMEOUT_MS = 45000;
+const SAVE_TIMEOUT_MS = 60000;
+const FEEDBACK_TIMEOUT_MS = 60000;
 
 async function saveAnswersToCloud(session){
   const payload = {
