@@ -722,6 +722,10 @@ async function finishAndSave(){
 /* 回答保存(1回・高速)→ 質問ごとのAIフィードバック取得(5回・並列)を行い、
    進捗を画面に反映しながら進める。sessionオブジェクトは直接書き換える(呼び出し元と共有)。
    戻り値は "success" | "error"(一部の質問だけ失敗した場合も、取れた分は表示するのでsuccess扱いにする)。 */
+const FEEDBACK_CONCURRENCY_LIMIT = 2; // 同時に送るリクエスト数(録音を含むと1件あたりのデータ量が大きく、
+                                       // 5件同時に送ると通信が混雑しやすいため制限する)
+const FEEDBACK_RETRY_COUNT = 2;       // 1回失敗しても、追加でこの回数まで自動再試行する(実質最大3回挑戦)
+
 async function runCloudFlow(session){
   const progress = session.answers.map(a => ({ questionId: a.questionId, status: "pending" }));
   setState({ screen:"finishing", feedbackProgress: progress });
@@ -733,34 +737,71 @@ async function runCloudFlow(session){
     return "error"; // 回答保存自体に失敗した場合は、フィードバック取得も行わない
   }
 
-  const results = await Promise.all(session.answers.map((a, idx) =>
-    requestFeedbackForOneQuestion(session, a, idx)
-      .then(feedback => {
-        progress[idx] = { questionId: a.questionId, status: "done" };
-        setState({ feedbackProgress: [...progress] });
-        return { questionId: a.questionId, ok: true, feedback };
-      })
-      .catch(err => {
-        console.error(`質問${idx + 1}(${a.questionId})のAIフィードバック取得に失敗 [段階:${err.stage || "不明"} / 分類:${err.category || "不明"}]`, err);
-        progress[idx] = { questionId: a.questionId, status: "error", category: err.category || "unknown", stage: err.stage || "unknown" };
-        setState({ feedbackProgress: [...progress] });
-        return {
-          questionId: a.questionId, ok: false, feedback: null,
-          errorInfo: { category: err.category || "unknown", stage: err.stage || "unknown", message: err.message }
-        };
-      })
-  ));
+  const tasks = session.answers.map((a, idx) => () => runOneFeedbackTask(session, a, idx, progress));
+  const results = await runWithConcurrencyLimit(tasks, FEEDBACK_CONCURRENCY_LIMIT);
 
-  const perQuestion = {};
-  const errors = {};
-  let anySuccess = false;
+  applyFeedbackResults(session, results);
+  const anySuccess = results.some(r => r.ok);
+  return anySuccess ? "success" : "error";
+}
+
+/* 1問分のAIフィードバックを、リトライも含めて取得する(進捗表示の更新もここで行う) */
+async function runOneFeedbackTask(session, answer, idx, progress){
+  try{
+    const feedback = await requestFeedbackForOneQuestionWithRetry(session, answer, idx);
+    if(progress) { progress[idx] = { questionId: answer.questionId, status: "done" }; setState({ feedbackProgress: [...progress] }); }
+    return { questionId: answer.questionId, ok: true, feedback };
+  }catch(err){
+    console.error(`質問${idx + 1}(${answer.questionId})のAIフィードバック取得に失敗(リトライ含め全て失敗) [段階:${err.stage || "不明"} / 分類:${err.category || "不明"}]`, err);
+    if(progress) { progress[idx] = { questionId: answer.questionId, status: "error", category: err.category || "unknown", stage: err.stage || "unknown" }; setState({ feedbackProgress: [...progress] }); }
+    return {
+      questionId: answer.questionId, ok: false, feedback: null,
+      errorInfo: { category: err.category || "unknown", stage: err.stage || "unknown", message: err.message }
+    };
+  }
+}
+
+/* 1問分の取得を、失敗したらFEEDBACK_RETRY_COUNT回まで自動で再試行する */
+async function requestFeedbackForOneQuestionWithRetry(session, answer, idx){
+  let lastErr;
+  for(let attempt = 1; attempt <= FEEDBACK_RETRY_COUNT + 1; attempt++){
+    try{
+      return await requestFeedbackForOneQuestion(session, answer, idx);
+    }catch(err){
+      lastErr = err;
+      console.error(`質問${idx + 1}(${answer.questionId}) 試行${attempt}/${FEEDBACK_RETRY_COUNT + 1}失敗 [段階:${err.stage || "不明"} / 分類:${err.category || "不明"}]`, err);
+      if(attempt <= FEEDBACK_RETRY_COUNT){
+        await new Promise(r => setTimeout(r, 1000 * attempt)); // 少し間隔をあけて再試行
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/* タスク(関数の配列)を、同時にlimit件までしか実行しないようにして順番に処理する */
+async function runWithConcurrencyLimit(taskFns, limit){
+  const results = new Array(taskFns.length);
+  let nextIndex = 0;
+  async function worker(){
+    while(nextIndex < taskFns.length){
+      const current = nextIndex++;
+      results[current] = await taskFns[current]();
+    }
+  }
+  const workerCount = Math.min(limit, taskFns.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+/* 取得結果をsessionに反映する(振り返り画面・過去の記録どちらでも共通で使う) */
+function applyFeedbackResults(session, results){
+  const perQuestion = (session.aiFeedback && session.aiFeedback.perQuestion) || {};
+  const errors = (session.aiFeedback && session.aiFeedback.errors) || {};
   results.forEach(r => {
-    if(r.ok){ perQuestion[r.questionId] = r.feedback; anySuccess = true; }
+    if(r.ok){ perQuestion[r.questionId] = r.feedback; delete errors[r.questionId]; }
     else { errors[r.questionId] = r.errorInfo; }
   });
   session.aiFeedback = { perQuestion, errors };
-
-  return anySuccess ? "success" : "error";
 }
 
 /* エラー分類コードを、利用者にも分かる短い日本語に変換する */
@@ -851,6 +892,24 @@ function renderReview(){
     screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false, cloudStatus:"idle", reviewSession:null
   });
   document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false, cloudStatus:"idle", reviewSession:null });
+
+  bindRegenerateButtons(session, () => setState({}));
+}
+
+/* 「🔄 この質問だけ再生成する」ボタンにクリック処理を割り当てる(振り返り画面・過去の記録どちらでも共通) */
+function bindRegenerateButtons(session, onDone){
+  app.querySelectorAll("[data-regenerate-idx]").forEach(btn => {
+    btn.onclick = async () => {
+      const idx = Number(btn.dataset.regenerateIdx);
+      btn.disabled = true;
+      btn.textContent = "生成中…";
+      const answer = session.answers[idx];
+      const result = await runOneFeedbackTask(session, answer, idx, null);
+      applyFeedbackResults(session, [result]);
+      await Storage.updateSession(session);
+      onDone();
+    };
+  });
 }
 
 /* 「①あなたの回答 ②AIからのフィードバック ③回答例」の3点を1つのカードにまとめて表示する。
@@ -884,7 +943,8 @@ function renderAnswerCard(number, a, aiFeedback){
     fbHtml = `
       <div class="ai-feedback-box ai-feedback-error">
         <p class="ai-feedback-title">🤖 AIからのフィードバック</p>
-        <p class="muted" style="margin:0;">取得できませんでした(${errorCategoryLabel(errorInfo.category)})</p>
+        <p class="muted" style="margin:0 0 8px;">取得できませんでした(${errorCategoryLabel(errorInfo.category)})</p>
+        <button class="btn" data-regenerate-idx="${number - 1}" style="width:auto; padding:6px 14px;">🔄 この質問だけ再生成する</button>
       </div>
     `;
   }
@@ -897,7 +957,7 @@ function renderAnswerCard(number, a, aiFeedback){
    (2) requestFeedbackForOneQuestion: 質問1問につき1回。5問分は並列で呼び出す(runCloudFlow側)。
        GAS側で「音声の文字起こし→フィードバック生成」の2段階を行うため、単独でも音声を含め安定して動く。
 ------------------------------------------------------------------------------------- */
-const SAVE_TIMEOUT_MS = 30000;      // 回答保存はGeminiを呼ばないので短めで十分
+const SAVE_TIMEOUT_MS = 45000;      // Geminiは呼ばないが、複数の録音データをまとめて送るため余裕を持たせる
 const FEEDBACK_TIMEOUT_MS = 45000;  // 1問分(文字起こし+フィードバック)の余裕を見た上限
 
 async function saveAnswersToCloud(session){
@@ -1032,6 +1092,8 @@ async function renderHistoryDetail(){
     <button class="btn" id="back-btn">一覧に戻る</button>
   `;
   document.getElementById("back-btn").onclick = () => setState({ screen:"history" });
+
+  bindRegenerateButtons(session, () => render());
 }
 
 /* =========================================================
