@@ -111,6 +111,7 @@
 
   .q-card{ background:var(--teal-50); border-radius:16px; padding:13px 15px; margin-bottom:10px; }
   .ai-feedback-box{ background:var(--card); border:1px dashed var(--coral-300); border-radius:12px; padding:10px 12px; margin-top:10px; font-size:13px; line-height:1.7; }
+  .ai-feedback-error{ border-color:#B23B22; }
   .ai-feedback-title{ font-weight:700; margin:0 0 6px; }
   .ai-feedback-label{ font-weight:600; font-size:12px; color:var(--text-muted); margin:8px 0 2px; }
   .ai-feedback-list{ margin:0 0 4px; padding-left:1.2em; }
@@ -275,6 +276,8 @@ async function loadQuestionsOnce(attemptLabel){
     throw new Error("invalid-response");
   }
 
+  // GAS側がサーバー処理時間(gasElapsedMs)を返すよう対応している場合、ここでログに出す
+  // (対応していない場合はundefinedのまま表示されないだけで、動作に影響はない)
   if(json && typeof json.gasElapsedMs === "number"){
     console.log(`[${attemptLabel}] GAS側の処理時間: ${(json.gasElapsedMs / 1000).toFixed(2)}秒(サーバー内で計測)`);
   }
@@ -292,6 +295,7 @@ async function loadQuestionsOnce(attemptLabel){
   }));
 }
 
+/* 呼び出し元にリアルタイムで状況を伝えるため、進捗コールバックを受け取る */
 async function loadQuestions(onAttempt){
   let lastErr;
   const overallStart = performance.now();
@@ -320,6 +324,11 @@ async function loadQuestions(onAttempt){
 
 /* =========================================================
    Storage抽象化レイヤー
+   ------------------------------------------------------
+   UI側は list / save / remove / saveDraft / loadDraft / clearDraft
+   という関数だけを使います。将来クラウド保存(Supabaseなど)や
+   管理者ログインを追加する際は、この中身をSESSION_IDをキーにした
+   API呼び出しに差し替えるだけで済むように設計しています。
 ========================================================= */
 const SESSIONS_KEY = `apparel_interview_sessions_v1__${SESSION_ID}`;
 const DRAFT_KEY = `apparel_interview_draft_v1__${SESSION_ID}`;
@@ -357,6 +366,7 @@ const Storage = {
     const sessions = await Storage.list();
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.filter(s => s.id !== sessionId)));
   },
+  // 保存済みのセッションを、同じIDのまま中身だけ差し替える(AIフィードバックの再取得成功時などに使う)
   async updateSession(updatedSession){
     if(!SUPPORT.localStorage) return false;
     try{
@@ -404,18 +414,18 @@ function debounce(fn, delay){
    アプリの状態
 ========================================================= */
 let state = {
-  screen: "top",
+  screen: "top",        // top | tips | practice | review | history | historyDetail | finishing
   qIndex: 0,
   showExample: false,
-  answers: [],
+  answers: [],           // {text, audioDataUrl} ※どちらか一方でも両方でも可
   recording: false,
   hasHistory: false,
   hasDraft: false,
   lastSavedNotice: false,
   viewingSessionId: null,
-  cloudStatus: "idle",
-  reviewSession: null,
-  feedbackProgress: null
+  cloudStatus: "idle",   // idle | sending | success | error(回答送信+AIフィードバック取得をまとめた状態)
+  reviewSession: null,   // 振り返り画面に表示するセッション({answers, aiFeedback}) — 練習直後・過去の記録の閲覧どちらでも共通で使う
+  feedbackProgress: null // 送信中の進捗表示用([{questionId, status:"pending"|"done"|"error"}, ...])
 };
 
 const app = document.getElementById("app");
@@ -569,6 +579,7 @@ function renderPractice(){
   document.getElementById("next-btn").onclick = onNext;
 }
 
+/* ブラウザによって対応する録音フォーマットが異なるため、使えるものを順に試す */
 function pickMimeType(){
   if(!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
   const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
@@ -583,7 +594,7 @@ let activeRecorder = null;
 function toggleRecording(){
   if(state.recording){
     if(activeRecorder){ try{ activeRecorder.stop(); }catch(e){} }
-    return;
+    return; // 後処理はonstopで行う
   }
   clearInputError();
   navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
@@ -689,13 +700,13 @@ async function finishAndSave(){
         audioDataUrl: a.audioDataUrl || null
       };
     }),
-    aiFeedback: null
+    aiFeedback: null // {perQuestion: {questionId: {goodPoints, improvementPoints, sampleAnswer, transcript?}}}
   };
 
   const shouldSubmit = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
 
   if(shouldSubmit){
-    const cloudStatus = await runCloudFlow(session);
+    const cloudStatus = await runCloudFlow(session); // 保存・進捗表示・並列フィードバック取得をまとめて行う
     const saved = await Storage.save(session);
     await Storage.clearDraft();
     await refreshFlags();
@@ -708,8 +719,9 @@ async function finishAndSave(){
   }
 }
 
-/* ------------------------- クラウド処理と進捗表示 ------------------------- */
-
+/* 回答保存(1回・高速)→ 質問ごとのAIフィードバック取得(5回・並列)を行い、
+   進捗を画面に反映しながら進める。sessionオブジェクトは直接書き換える(呼び出し元と共有)。
+   戻り値は "success" | "error"(一部の質問だけ失敗した場合も、取れた分は表示するのでsuccess扱いにする)。 */
 async function runCloudFlow(session){
   const progress = session.answers.map(a => ({ questionId: a.questionId, status: "pending" }));
   setState({ screen:"finishing", feedbackProgress: progress });
@@ -718,44 +730,53 @@ async function runCloudFlow(session){
     await saveAnswersToCloud(session);
   }catch(err){
     console.error("saveAnswersToCloud failed", err);
-    return "error"; 
+    return "error"; // 回答保存自体に失敗した場合は、フィードバック取得も行わない
   }
+
+  const results = await Promise.all(session.answers.map((a, idx) =>
+    requestFeedbackForOneQuestion(session, a, idx)
+      .then(feedback => {
+        progress[idx] = { questionId: a.questionId, status: "done" };
+        setState({ feedbackProgress: [...progress] });
+        return { questionId: a.questionId, ok: true, feedback };
+      })
+      .catch(err => {
+        console.error(`質問${idx + 1}(${a.questionId})のAIフィードバック取得に失敗 [段階:${err.stage || "不明"} / 分類:${err.category || "不明"}]`, err);
+        progress[idx] = { questionId: a.questionId, status: "error", category: err.category || "unknown", stage: err.stage || "unknown" };
+        setState({ feedbackProgress: [...progress] });
+        return {
+          questionId: a.questionId, ok: false, feedback: null,
+          errorInfo: { category: err.category || "unknown", stage: err.stage || "unknown", message: err.message }
+        };
+      })
+  ));
 
   const perQuestion = {};
+  const errors = {};
   let anySuccess = false;
+  results.forEach(r => {
+    if(r.ok){ perQuestion[r.questionId] = r.feedback; anySuccess = true; }
+    else { errors[r.questionId] = r.errorInfo; }
+  });
+  session.aiFeedback = { perQuestion, errors };
 
- // 1問ずつ順番(直列)に処理する
-  for (let idx = 0; idx < session.answers.length; idx++) {
-    
-    // ★修正：待機時間を5000(5秒)から20000(20秒)に増やす
-    if (idx > 0) {
-      console.log(`[Q${idx + 1}] API制限回避のため15秒待機します...`);
-      await new Promise(resolve => setTimeout(resolve, 20000));
-    }
-
-    const a = session.answers[idx];
-    try {
-      const feedback = await requestFeedbackForOneQuestion(session, a, idx);
-      progress[idx] = { questionId: a.questionId, status: "done" };
-      setState({ feedbackProgress: [...progress] });
-      perQuestion[a.questionId] = feedback;
-      anySuccess = true;
-    } catch(err) {
-      console.error(`[Q${idx + 1}] ❌ エラー発生`);
-      console.error(`  - 詳細メッセージ: ${err.message}`);
-      
-      progress[idx] = { 
-        questionId: a.questionId, 
-        status: "error", 
-        category: err.category,
-        httpStatus: err.httpStatus
-      };
-      setState({ feedbackProgress: [...progress] });
-    }
-  }
-
-  session.aiFeedback = { perQuestion };
   return anySuccess ? "success" : "error";
+}
+
+/* エラー分類コードを、利用者にも分かる短い日本語に変換する */
+function errorCategoryLabel(category){
+  const labels = {
+    rate_limit: "AIの利用が一時的に混み合っています",
+    timeout: "処理に時間がかかりすぎました(タイムアウト)",
+    network: "通信エラーが発生しました",
+    content_blocked: "内容の確認でブロックされました",
+    response_invalid: "AIからの応答を正しく読み取れませんでした",
+    gemini_server_error: "AI側で一時的なエラーが発生しました",
+    request_invalid: "送信内容に問題がありました",
+    config: "設定に問題があります(管理者にご確認ください)",
+    unknown: "原因不明のエラーが発生しました"
+  };
+  return labels[category] || labels.unknown;
 }
 
 function renderFinishing(){
@@ -771,7 +792,7 @@ function renderFinishing(){
           <div class="progress-checklist-row">
             <span class="progress-checklist-icon">${progressIcon(p.status)}</span>
             <span>質問${i+1}</span>
-            <span class="muted progress-checklist-status">${progressLabel(p)}</span>
+            <span class="muted progress-checklist-status">${p.status === "error" ? errorCategoryLabel(p.category) : progressLabel(p.status)}</span>
           </div>
         `).join("")}
       </div>
@@ -784,27 +805,13 @@ function progressIcon(status){
   if(status === "error") return "⚠️";
   return "⏳";
 }
-
-function progressLabel(p){
-  if(p.status === "done") return "完了";
-  if(p.status === "error") {
-    let msg = "失敗: ";
-    switch(p.category) {
-      case "rate_limit": msg += "API制限(アクセス過多)"; break;
-      case "timeout": msg += "タイムアウト"; break;
-      case "content_blocked": msg += "ブロックされました"; break;
-      case "gemini_server_error": msg += "AIサーバー障害"; break;
-      case "network_error": msg += "通信エラー"; break;
-      default: msg += "システムエラー";
-    }
-    // HTTPステータスがあれば画面にも併記する
-    if(p.httpStatus) msg += ` (HTTP ${p.httpStatus})`;
-    return msg;
-  }
+function progressLabel(status){
+  if(status === "done") return "完了";
+  if(status === "error") return "失敗";
   return "確認中…";
 }
 
-/* ------------------------- 振り返り ------------------------- */
+/* ------------------------- 振り返り(直後・過去の記録どちらも共通で使う) ------------------------- */
 function renderReview(){
   const session = state.reviewSession;
   const showCloudBanner = state.cloudStatus !== "idle";
@@ -835,7 +842,7 @@ function renderReview(){
     retryLink.onclick = async (e) => {
       e.preventDefault();
       const cloudStatus = await runCloudFlow(session);
-      await Storage.updateSession(session);
+      await Storage.updateSession(session); // 再試行で取得できたフィードバックを保存済みの記録にも反映
       setState({ screen:"review", cloudStatus, reviewSession: session, feedbackProgress: null });
     };
   }
@@ -845,6 +852,8 @@ function renderReview(){
   document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false, cloudStatus:"idle", reviewSession:null });
 }
 
+/* 「①あなたの回答 ②AIからのフィードバック ③回答例」の3点を1つのカードにまとめて表示する。
+   振り返り画面(直後)・過去の記録の詳細、両方から呼ばれる共通パーツ。 */
 function renderAnswerCard(number, a, aiFeedback){
   let body = "";
   if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
@@ -852,6 +861,7 @@ function renderAnswerCard(number, a, aiFeedback){
   if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
 
   const fb = aiFeedback && aiFeedback.perQuestion ? aiFeedback.perQuestion[a.questionId] : null;
+  const errorInfo = aiFeedback && aiFeedback.errors ? aiFeedback.errors[a.questionId] : null;
   let fbHtml = "";
   if(fb){
     const good = (fb.goodPoints || []).map(p => `<li>${p}</li>`).join("");
@@ -869,20 +879,31 @@ function renderAnswerCard(number, a, aiFeedback){
         ${missing ? `<p class="ai-feedback-label">さらに良くするために追加すると良い内容</p><ul class="ai-feedback-list">${missing}</ul>` : ""}
       </div>
     `;
+  } else if(errorInfo){
+    fbHtml = `
+      <div class="ai-feedback-box ai-feedback-error">
+        <p class="ai-feedback-title">🤖 AIからのフィードバック</p>
+        <p class="muted" style="margin:0;">取得できませんでした(${errorCategoryLabel(errorInfo.category)})</p>
+      </div>
+    `;
   }
 
   return `<div class="q-card"><p class="q-label">${number}. ${a.questionText}</p>${body}${fbHtml}</div>`;
 }
 
-/* ------------------------- クラウドとの通信(GAS) ------------------------- */
-const SAVE_TIMEOUT_MS = 60000;
-const FEEDBACK_TIMEOUT_MS = 60000;
+/* ------------------------- クラウドとの通信(Google Apps Script) -------------------------
+   (1) saveAnswersToCloud: 回答(テキスト・録音)をまとめて1回で保存する。Geminiは呼ばないため速い。
+   (2) requestFeedbackForOneQuestion: 質問1問につき1回。5問分は並列で呼び出す(runCloudFlow側)。
+       GAS側で「音声の文字起こし→フィードバック生成」の2段階を行うため、単独でも音声を含め安定して動く。
+------------------------------------------------------------------------------------- */
+const SAVE_TIMEOUT_MS = 30000;      // 回答保存はGeminiを呼ばないので短めで十分
+const FEEDBACK_TIMEOUT_MS = 45000;  // 1問分(文字起こし+フィードバック)の余裕を見た上限
 
 async function saveAnswersToCloud(session){
   const payload = {
     id: SESSION_ID,
     brand: BRAND_ID,
-    submissionId: session.id,
+    submissionId: session.id, // このセッション固有のID。再試行時も同じ値なので、GAS側で重複防止に使う
     submittedAt: session.createdAt,
     answers: session.answers.map(a => ({
       questionId: a.questionId,
@@ -899,7 +920,6 @@ async function saveAnswersToCloud(session){
 }
 
 async function requestFeedbackForOneQuestion(session, answer, idx){
-  console.log(`[Q${idx + 1}] Gemini APIへ送信開始`);
   const payload = {
     id: SESSION_ID,
     action: "generateFeedback",
@@ -913,37 +933,32 @@ async function requestFeedbackForOneQuestion(session, answer, idx){
       audioDataUrl: answer.audioDataUrl || null
     }
   };
-  
   let json;
-  try {
+  try{
     json = await postToGas(payload, FEEDBACK_TIMEOUT_MS);
-    console.log(`[Q${idx + 1}] APIレスポンス受信`);
-  } catch(err) {
-    err.stage = "network";
-    err.category = err.message === "timeout" ? "timeout" : "network_error";
-    throw err;
+  }catch(err){
+    // 通信自体が失敗した場合(タイムアウトなど)。GASからの構造化エラーは無いので、分類だけこちらで付与する
+    const wrapped = new Error(err.message === "timeout" ? "通信がタイムアウトしました" : (err.message || "通信エラー"));
+    wrapped.category = err.message === "timeout" ? "timeout" : "network";
+    wrapped.stage = "network";
+    throw wrapped;
   }
-
   if(!json || json.status !== "ok"){
     const err = new Error((json && json.message) || "unknown error");
-    if(json) {
-      err.stage = json.stage;
-      err.category = json.category;
-      err.httpStatus = json.httpStatus;
-      err.geminiMessage = json.geminiMessage;
-    }
+    err.category = (json && json.category) || "unknown";
+    err.stage = (json && json.stage) || "unknown";
+    err.httpStatus = json && json.httpStatus;
+    err.geminiMessage = json && json.geminiMessage;
     throw err;
   }
-  
-  console.log(`[Q${idx + 1}] AIフィードバック生成完了`);
-  console.log(`[Q${idx + 1}] スプレッド保存完了`);
-  
   return json.feedback;
 }
 
 async function postToGas(payload, timeoutMs){
   let res;
   try{
+    // GASのWebアプリはContent-Type: application/jsonだとCORSで弾かれることがあるため、
+    // text/plainで送り、GAS側でJSON.parseする方式にしている(GAS連携の定番の回避策)
     res = await fetchWithTimeout(CONFIG.gasWebAppUrl, timeoutMs, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -1058,6 +1073,9 @@ async function boot(){
   renderLoading(false);
   await refreshFlags();
 
+  // 10秒経っても結果が出ていなければ、「読み込み中」画面に再読み込みボタンを足す
+  // (loadQuestions自体は1回10秒でタイムアウト・自動再試行するため、
+  //  この表示はユーザーへの安心材料であり、処理自体は裏で継続している)
   let settled = false;
   const slowTimer = setTimeout(() => {
     if(!settled) renderLoading(true);
