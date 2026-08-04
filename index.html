@@ -1,1082 +1,393 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="description" content="アパレル販売職を目指す方向けの、一人でできる面談練習サイトです。スマートフォンで5〜10分、面談のポイント確認から模擬質問への回答まで練習できます。">
-<meta name="robots" content="noindex">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👗</text></svg>">
-<title>アパレル面談練習</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg-a: #F3F1EA;
-    --bg-b: #EFF6F1;
-    --card: #FFFFFF;
-    --teal-50: #E1F5EE;
-    --teal-100: #9FE1CB;
-    --teal-600: #0F6E56;
-    --teal-900: #04342C;
-    --coral-100: #FBD9C9;
-    --coral-300: #F0997B;
-    --coral-800: #4A1B0C;
-    --text: #2C2C2A;
-    --text-muted: #78766D;
-    --border: #E4E1D8;
-    --error-bg: #FDECEA;
-    --error-text: #7A271A;
-  }
-  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body{ height:100%; }
-  body{
-    margin:0; color:var(--text);
-    font-family:"Noto Sans JP", sans-serif;
-    display:flex; justify-content:center; align-items:flex-start;
-    padding:28px 14px calc(28px + env(safe-area-inset-bottom));
-    min-height:100vh;
-    background: radial-gradient(circle at 20% 0%, var(--bg-b), var(--bg-a) 70%);
-  }
-  .phone{
-    width:100%; max-width:400px; background:var(--card);
-    border-radius:32px; border:1px solid var(--border);
-    padding:22px 20px calc(22px + env(safe-area-inset-bottom));
-    box-shadow: 0 10px 30px rgba(45,60,50,0.08);
-  }
-  .accent-bar{ height:6px; width:64px; border-radius:999px; margin:0 auto 18px;
-    background:linear-gradient(90deg, var(--teal-100), var(--coral-300)); }
-  .logo-mark{
-    width:56px; height:56px; border-radius:18px; margin:0 auto 14px;
-    background:linear-gradient(135deg, var(--teal-100), var(--coral-100));
-    display:flex; align-items:center; justify-content:center; font-size:28px;
-    box-shadow: 0 8px 18px rgba(159,225,203,0.4);
-  }
-  h1{ font-size:21px; font-weight:800; margin:0 0 6px; text-align:center; }
-  h2{ font-size:17px; font-weight:800; margin:0 0 16px; text-align:center;}
-  p{ line-height:1.7; margin:0 0 12px; }
-  .muted{ color:var(--text-muted); font-size:13px; }
-  .center{ text-align:center; }
-  .btn{
-    font-family:inherit; font-size:15px; font-weight:600;
-    border:1.5px solid var(--border); background:#fff; color:var(--text);
-    border-radius:999px; padding:13px 18px; cursor:pointer;
-    width:100%; min-height:48px; touch-action:manipulation;
-    transition:transform .08s ease, background .15s ease, border-color .15s ease;
-  }
-  .btn:active{ transform:scale(0.97); }
-  @media (hover: hover) {
-    .btn:hover{ background:#FAFAF7; }
-    .btn-primary:hover{ filter:brightness(0.98); }
-  }
-  .btn-primary{
-    background:linear-gradient(135deg, var(--teal-100), #8fd8bf); color:var(--teal-900); border:none; font-weight:700;
-    box-shadow:0 8px 16px rgba(159,225,203,0.45);
-  }
-  .btn-ghost{ background:transparent; border:none; color:var(--teal-900); text-align:left; padding-left:0; width:auto; min-height:auto; }
-  .btn-danger{ background:transparent; border:none; color:#B23B22; font-size:12px; text-decoration:underline; width:auto; min-height:auto; padding:4px 0;}
-  .note-box{
-    background:var(--teal-50); color:var(--teal-900); font-size:12px;
-    padding:10px 12px; border-radius:14px; margin-bottom:16px; line-height:1.6;
-  }
-  .warn-box{
-    background:#FFF6E5; color:#6B4E00; font-size:12px;
-    padding:10px 12px; border-radius:14px; margin-bottom:16px; line-height:1.6;
-  }
-  .error-banner{
-    background:var(--error-bg); color:var(--error-text); font-size:12px;
-    padding:10px 12px; border-radius:12px; margin-top:10px; line-height:1.6;
-  }
-  .tip-row{ display:flex; align-items:center; gap:12px; background:var(--teal-50);
-    border-radius:16px; padding:14px; margin-bottom:10px; }
-  .tip-icon{ width:38px; height:38px; min-width:38px; border-radius:50%; background:#fff;
-    display:flex; align-items:center; justify-content:center; font-size:17px; }
-  .tip-text{ font-size:14px; font-weight:600; margin:0; }
-  .progress-wrap{ margin-bottom:18px; }
-  .progress-label{ display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:6px; font-weight:600; }
-  .progress-bar{ height:9px; background:var(--border); border-radius:999px; overflow:hidden; }
-  .progress-fill{ height:100%; background:linear-gradient(90deg, var(--teal-100), var(--coral-300)); border-radius:999px; transition:width .3s ease; }
-  .q-text{ font-size:18px; font-weight:800; line-height:1.6; margin:0 0 14px; }
-  textarea{
-    width:100%; min-height:90px; font-family:inherit; font-size:16px;
-    border:1.5px solid var(--border); border-radius:14px; padding:12px 13px; resize:vertical;
-  }
-  textarea:focus, .btn:focus-visible, input:focus-visible{ outline:2px solid var(--teal-100); outline-offset:1px; }
-  .divider{ border:none; border-top:1px solid var(--border); margin:18px 0; }
-  .record-section{ margin:14px 0; }
-  .record-section audio{ width:100%; margin-top:8px; }
-  .btn:disabled{ opacity:0.6; cursor:default; }
-  .btn-recording{ background:#E5484D; color:#fff; border:none; font-weight:700; box-shadow:0 8px 18px rgba(229,72,77,0.4); }
-  .example-box{ background:var(--teal-50); border-radius:14px; padding:13px 15px; margin-top:10px; }
-  .example-box p{ margin:0; font-size:13px; line-height:1.7; color:var(--teal-900); }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アパレル面接練習ツール</title>
+  <style>
+    /* 基本レイアウト */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f4f6f8;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #eaeaea;
+      padding-bottom: 10px;
+    }
+    
+    /* ボタンデザイン */
+    .btn-primary {
+      background-color: #0070f3;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.2s;
+    }
+    .btn-primary:hover {
+      background-color: #0051a2;
+    }
+    .btn-primary:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .btn-retry {
+      background-color: #ff4d4f;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 8px;
+      font-weight: bold;
+    }
+    .btn-retry:hover {
+      background-color: #d9363e;
+    }
 
-  .q-card{ background:var(--teal-50); border-radius:16px; padding:13px 15px; margin-bottom:10px; }
-  .ai-feedback-box{ background:var(--card); border:1px dashed var(--coral-300); border-radius:12px; padding:10px 12px; margin-top:10px; font-size:13px; line-height:1.7; }
-  .ai-feedback-title{ font-weight:700; margin:0 0 6px; }
-  .ai-feedback-label{ font-weight:600; font-size:12px; color:var(--text-muted); margin:8px 0 2px; }
-  .ai-feedback-list{ margin:0 0 4px; padding-left:1.2em; }
-  .ai-feedback-list li{ margin-bottom:2px; }
-  .ai-feedback-sample{ margin:0; background:var(--teal-50); border-radius:10px; padding:8px 10px; }
-  .progress-checklist{ margin-top:20px; text-align:left; }
-  .progress-checklist-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--border); font-size:14px; }
-  .progress-checklist-icon{ font-size:16px; width:20px; text-align:center; }
-  .progress-checklist-status{ margin-left:auto; font-size:12px; }
-  .q-label{ font-size:12px; color:var(--text-muted); margin:0 0 6px; font-weight:600; }
-  .answer-text{ font-size:13px; line-height:1.7; margin:0; }
-  audio{ width:100%; height:34px; margin-top:6px; }
-  .history-row{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:13px 0; border-bottom:1px solid var(--border);
-  }
-  .history-row p{ margin:0; }
-  .history-date{ font-size:13px; font-weight:700; }
-  .history-meta{ font-size:11px; color:var(--text-muted); margin-top:2px; }
-  .empty-state{ text-align:center; padding:24px 0; color:var(--text-muted); font-size:13px; }
-  .stack{ display:flex; flex-direction:column; gap:10px; }
-</style>
+    /* 質問カード */
+    .question-card {
+      border: 1px solid #e1e4e8;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background-color: #fafafa;
+      transition: border-color 0.3s, background-color 0.3s;
+    }
+    .question-card.status-processing {
+      border-color: #1890ff;
+      background-color: #e6f7ff;
+    }
+    .question-card.status-success {
+      border-color: #52c41a;
+      background-color: #f6ffed;
+    }
+    .question-card.status-error {
+      border-color: #ff4d4f;
+      background-color: #fff2f0;
+    }
+
+    /* ステータスバッジ */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .badge-pending { background: #e0e0e0; color: #666; }
+    .badge-processing { background: #91d5ff; color: #0050b3; }
+    .badge-waiting { background: #ffe58f; color: #873800; }
+    .badge-success { background: #b7eb8f; color: #135200; }
+    .badge-error { background: #ffa39e; color: #820014; }
+
+    /* フィードバック表示エリア */
+    .feedback-box {
+      margin-top: 12px;
+      padding: 16px;
+      background-color: #fff;
+      border-left: 4px solid #52c41a;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .feedback-box h4 {
+      margin: 0 0 12px 0;
+      color: #237804;
+      font-size: 1.1rem;
+    }
+    .feedback-section {
+      margin-bottom: 12px;
+    }
+    .feedback-section strong {
+      display: block;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    .feedback-section ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .error-box {
+      margin-top: 12px;
+      padding: 12px;
+      background-color: #fff;
+      border-left: 4px solid #ff4d4f;
+      border-radius: 4px;
+    }
+  </style>
 </head>
 <body>
-<div class="phone" id="app"></div>
+
+<div class="container">
+  <h1>アパレル面接練習（AIリアルタイムフィードバック）</h1>
+  
+  <div style="margin-bottom: 20px;">
+    <button id="start-btn" class="btn-primary" onclick="startPracticeProcess()">回答を送信してフィードバックを受け取る</button>
+  </div>
+
+  <!-- 質問リスト（必要に応じて動的生成に置き換え可能） -->
+  <div id="questions-wrapper">
+    <div id="question-card-1" class="question-card">
+      <h3>質問 1: 志望動機を教えてください <span id="status-badge-1" class="status-badge badge-pending">未送信</span></h3>
+      <p id="status-text-1" style="font-size: 0.9rem; color: #666;"></p>
+      <div id="feedback-result-1" style="display: none;"></div>
+    </div>
+
+    <div id="question-card-2" class="question-card">
+      <h3>質問 2: 接客で大切にしていることは何ですか？ <span id="status-badge-2" class="status-badge badge-pending">未送信</span></h3>
+      <p id="status-text-2" style="font-size: 0.9rem; color: #666;"></p>
+      <div id="feedback-result-2" style="display: none;"></div>
+    </div>
+
+    <div id="question-card-3" class="question-card">
+      <h3>質問 3: これまでで一番満足された接客エピソードは？ <span id="status-badge-3" class="status-badge badge-pending">未送信</span></h3>
+      <p id="status-text-3" style="font-size: 0.9rem; color: #666;"></p>
+      <div id="feedback-result-3" style="display: none;"></div>
+    </div>
+
+    <div id="question-card-4" class="question-card">
+      <h3>質問 4: 当ブランドの服の魅力をどう伝えますか？ <span id="status-badge-4" class="status-badge badge-pending">未送信</span></h3>
+      <p id="status-text-4" style="font-size: 0.9rem; color: #666;"></p>
+      <div id="feedback-result-4" style="display: none;"></div>
+    </div>
+
+    <div id="question-card-5" class="question-card">
+      <h3>質問 5: 今後のキャリアプランを教えてください <span id="status-badge-5" class="status-badge badge-pending">未送信</span></h3>
+      <p id="status-text-5" style="font-size: 0.9rem; color: #666;"></p>
+      <div id="feedback-result-5" style="display: none;"></div>
+    </div>
+  </div>
+</div>
 
 <script>
-/* =========================================================
-   機能サポート判定(未対応ブラウザ・エラー対応のため)
-========================================================= */
-const SUPPORT = {
-  mediaRecorder: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder),
-  localStorage: (() => {
-    try{
-      const k = "__storage_test__";
-      localStorage.setItem(k, "1");
-      localStorage.removeItem(k);
-      return true;
-    }catch(e){ return false; }
-  })()
-};
+  // ★設定項目：発行したGASのウェブアプリURLをここに貼り付けてください
+  const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec";
 
-/* =========================================================
-   質問データ
-   ------------------------------------------------------
-   話し方(面談)のポイントのみコード内に保持。
-   質問・回答例はコード内に持たず、Google Apps Script経由で
-   スプレッドシート「質問マスタ」から取得する(questionsは起動時に読み込む)。
-========================================================= */
-const DATA = {
-  interviewTips: [
-    { icon:"😊", text:"笑顔を意識しましょう" },
-    { icon:"🗣", text:"いつもよりゆっくり話しましょう" },
-    { icon:"💬", text:"結論から簡潔に伝えましょう" },
-    { icon:"📝", text:"回答を整理してから、声に出して練習すると本番で話しやすくなります" }
-  ],
-  questions: [] // 起動時にloadQuestions()で読み込まれる
-};
-
-/* =========================================================
-   設定
-   ------------------------------------------------------
-   cloudEnabled: 求職者向けの説明文を切り替えるスイッチ。
-   GAS送信機能により実際に担当者が回答を確認できるようになったため true。
-   gasWebAppUrl: Google Apps ScriptをWebアプリとして公開したときのURL。
-   ここが空欄の間は「送信」機能は表示されない(ローカル保存のみで動作する)。
-========================================================= */
-const CONFIG = {
-  cloudEnabled: true,
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
-};
-
-function getPrivacyNoticeText(){
-  return CONFIG.cloudEnabled
-    ? "入力内容は、面談準備のサポートを目的として、担当者が確認する場合があります。"
-    : "この練習内容は、この端末にのみ保存されます。他の人には共有されません。";
-}
-
-function getSavedConfirmationText(){
-  return "この記録はブラウザに保存されました。トップ画面の「過去の練習を見る」からいつでも見返せます。";
-}
-
-/* =========================================================
-   求職者(スタッフ)ごとの専用URL対応
-   ------------------------------------------------------
-   ?id=XXXX の形でアクセスされた場合、そのIDを使う。
-   なければ、この端末用のIDを自動生成して使い続ける
-   (この場合はスタッフIDが不明なため、GASへの送信ボタンは表示しない)。
-========================================================= */
-function getSessionId(){
-  const params = new URLSearchParams(window.location.search);
-  const fromUrl = params.get("id");
-  if(fromUrl){
-    try{ localStorage.setItem("apparel_interview_last_id", fromUrl); }catch(e){}
-    return { id: fromUrl, fromUrl: true };
-  }
-  try{
-    const saved = localStorage.getItem("apparel_interview_last_id");
-    if(saved) return { id: saved, fromUrl: false };
-  }catch(e){}
-  const generated = (window.crypto && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : "local_" + Date.now() + "_" + Math.random().toString(36).slice(2);
-  try{ localStorage.setItem("apparel_interview_last_id", generated); }catch(e){}
-  return { id: generated, fromUrl: false };
-}
-const SESSION = getSessionId();
-const SESSION_ID = SESSION.id;
-const SESSION_ID_FROM_URL = SESSION.fromUrl;
-
-/* URLの ?brand= を読み取る(例: ?id=LX001&brand=PRADA)。指定がなければ空文字。
-   その場合、GAS側で「共通」ブランドの質問セットにフォールバックする。 */
-const BRAND_ID = new URLSearchParams(window.location.search).get("brand") || "";
-
-/* =========================================================
-   質問データの読み込み(Google Apps Script経由でスプレッドシートから取得)
-   ------------------------------------------------------
-   ・1回の通信は10秒でタイムアウトさせる(AbortController)
-   ・失敗したら1〜2回まで自動で再試行する(合計最大3回)
-   ・すべて失敗したら、呼び出し元(boot)でエラー画面を表示する
-========================================================= */
-const LOAD_TIMEOUT_MS = 10000;
-const LOAD_MAX_RETRIES = 2; // 初回 + 最大2回の再試行 = 最大3回試行
-
-function fetchWithTimeout(url, timeoutMs, options){
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const fetchOptions = Object.assign({ method: "GET" }, options || {}, { signal: controller.signal });
-  return fetch(url, fetchOptions).finally(() => clearTimeout(timer));
-}
-
-async function loadQuestionsOnce(attemptLabel){
-  if(!CONFIG.gasWebAppUrl){
-    throw new Error("gas-not-configured");
-  }
-  const url = CONFIG.gasWebAppUrl + "?brand=" + encodeURIComponent(BRAND_ID);
-  const t0 = performance.now();
-  let res;
-  try{
-    res = await fetchWithTimeout(url, LOAD_TIMEOUT_MS);
-  }catch(err){
-    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-    console.error(`[${attemptLabel}] fetch失敗 (${elapsed}秒経過): ${err.name} - ${err.message}`);
-    if(err.name === "AbortError") throw new Error("timeout");
-    throw new Error("network");
-  }
-  const fetchElapsed = ((performance.now() - t0) / 1000).toFixed(2);
-  console.log(`[${attemptLabel}] fetch完了: ${fetchElapsed}秒 (HTTPステータス: ${res.status})`);
-
-  if(!res.ok){
-    console.error(`[${attemptLabel}] HTTPエラー: ステータス ${res.status} ${res.statusText}`);
-    throw new Error("network");
-  }
-
-  const t1 = performance.now();
-  let json;
-  try{
-    json = await res.json();
-  }catch(err){
-    const parseElapsed = ((performance.now() - t1) / 1000).toFixed(2);
-    console.error(`[${attemptLabel}] レスポンスのJSON解析に失敗 (解析に${parseElapsed}秒): ${err.message}`);
-    throw new Error("invalid-response");
-  }
-
-  if(json && typeof json.gasElapsedMs === "number"){
-    console.log(`[${attemptLabel}] GAS側の処理時間: ${(json.gasElapsedMs / 1000).toFixed(2)}秒(サーバー内で計測)`);
-  }
-
-  if(!json || json.status !== "ok" || !Array.isArray(json.questions) || json.questions.length === 0){
-    const msg = (json && json.message) || "no-questions";
-    console.error(`[${attemptLabel}] GASからのエラー応答: ${msg}`, json);
-    throw new Error(msg);
-  }
-  return json.questions.map(q => ({
-    id: q.id,
-    text: q.text,
-    tip: q.tip || "",
-    answerExample: q.answerExample || ""
-  }));
-}
-
-async function loadQuestions(onAttempt){
-  let lastErr;
-  const overallStart = performance.now();
-  for(let attempt = 1; attempt <= LOAD_MAX_RETRIES + 1; attempt++){
-    if(onAttempt) onAttempt(attempt);
-    const label = `質問読み込み 試行${attempt}/${LOAD_MAX_RETRIES + 1}`;
-    try{
-      const result = await loadQuestionsOnce(label);
-      const totalElapsed = ((performance.now() - overallStart) / 1000).toFixed(2);
-      console.log(`[${label}] 成功(合計経過時間: ${totalElapsed}秒)`);
-      return result;
-    }catch(err){
-      lastErr = err;
-      console.error(`[${label}] 失敗: ${err.message}`, err);
-      if(attempt <= LOAD_MAX_RETRIES){
-        const waitMs = 800 * attempt;
-        console.log(`[${label}] ${waitMs}ms待ってから再試行します`);
-        await new Promise(r => setTimeout(r, waitMs));
-      }
-    }
-  }
-  const totalElapsed = ((performance.now() - overallStart) / 1000).toFixed(2);
-  console.error(`質問の読み込みが全て失敗しました(合計経過時間: ${totalElapsed}秒、最終エラー: ${lastErr && lastErr.message}`);
-  throw lastErr;
-}
-
-/* =========================================================
-   Storage抽象化レイヤー
-========================================================= */
-const SESSIONS_KEY = `apparel_interview_sessions_v1__${SESSION_ID}`;
-const DRAFT_KEY = `apparel_interview_draft_v1__${SESSION_ID}`;
-const MAX_SESSIONS = 8;
-
-const Storage = {
-  async list(){
-    if(!SUPPORT.localStorage) return [];
-    try{
-      const raw = localStorage.getItem(SESSIONS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    }catch(e){ console.error("Storage.list failed", e); return []; }
-  },
-  async save(session){
-    if(!SUPPORT.localStorage) return false;
-    try{
-      const sessions = await Storage.list();
-      sessions.unshift(session);
-      while(sessions.length > MAX_SESSIONS) sessions.pop();
-      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-      return true;
-    }catch(e){
-      console.error("Storage.save failed, retrying smaller", e);
-      try{
-        const sessions = await Storage.list();
-        sessions.unshift(session);
-        sessions.length = Math.max(1, sessions.length - 2);
-        localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-        return true;
-      }catch(e2){ console.error("Storage.save failed again", e2); return false; }
-    }
-  },
-  async remove(sessionId){
-    if(!SUPPORT.localStorage) return;
-    const sessions = await Storage.list();
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.filter(s => s.id !== sessionId)));
-  },
-  async updateSession(updatedSession){
-    if(!SUPPORT.localStorage) return false;
-    try{
-      const sessions = await Storage.list();
-      const idx = sessions.findIndex(s => s.id === updatedSession.id);
-      if(idx === -1) return false;
-      sessions[idx] = updatedSession;
-      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-      return true;
-    }catch(e){ console.error("Storage.updateSession failed", e); return false; }
-  },
-  async saveDraft(draft){
-    if(!SUPPORT.localStorage) return false;
-    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); return true; }
-    catch(e){ console.error("saveDraft failed", e); return false; }
-  },
-  async loadDraft(){
-    if(!SUPPORT.localStorage) return null;
-    try{
-      const raw = localStorage.getItem(DRAFT_KEY);
-      return raw ? JSON.parse(raw) : null;
-    }catch(e){ return null; }
-  },
-  async clearDraft(){
-    if(!SUPPORT.localStorage) return;
-    try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
-  }
-};
-
-function blobToDataURL(blob){
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-function debounce(fn, delay){
-  let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
-}
-
-/* =========================================================
-   アプリの状態
-========================================================= */
-let state = {
-  screen: "top",
-  qIndex: 0,
-  showExample: false,
-  answers: [],
-  recording: false,
-  hasHistory: false,
-  hasDraft: false,
-  lastSavedNotice: false,
-  viewingSessionId: null,
-  cloudStatus: "idle",
-  reviewSession: null,
-  feedbackProgress: null
-};
-
-const app = document.getElementById("app");
-
-function setState(patch){
-  state = { ...state, ...patch };
-  render();
-}
-
-async function refreshFlags(){
-  const [sessions, draft] = await Promise.all([Storage.list(), Storage.loadDraft()]);
-  state.hasHistory = sessions.length > 0;
-  state.hasDraft = !!(draft && draft.answers && (
-    draft.answers.some(a => a && ((a.text && a.text.trim()) || a.audioDataUrl)) || draft.qIndex > 0
-  ));
-}
-
-function render(){
-  if(state.screen === "top") return renderTop();
-  if(state.screen === "tips") return renderTips();
-  if(state.screen === "practice") return renderPractice();
-  if(state.screen === "finishing") return renderFinishing();
-  if(state.screen === "review") return renderReview();
-  if(state.screen === "history") return renderHistory();
-  if(state.screen === "historyDetail") return renderHistoryDetail();
-}
-
-/* ------------------------- トップ画面 ------------------------- */
-function renderTop(){
-  app.innerHTML = `
-    <div class="accent-bar"></div>
-    <div class="logo-mark">👗</div>
-    <h1>アパレル面談練習</h1>
-    <p class="muted center" style="margin-bottom:14px;">5〜10分で、一人で面談の練習ができます。</p>
-    <div class="note-box">${getPrivacyNoticeText()}</div>
-    ${!SUPPORT.localStorage ? `<div class="warn-box">この端末では自動保存が利用できない可能性があります(プライベートブラウズモードなど)。練習内容は、ページを閉じると失われる場合があります。</div>` : ""}
-    <div class="stack">
-      ${state.hasDraft ? `<button class="btn btn-primary" id="resume-btn">前回の続きから練習 ↗</button>` : ""}
-      <button class="btn ${state.hasDraft ? "" : "btn-primary"}" id="start-btn">${state.hasDraft ? "新しく練習をはじめる" : "面談練習をはじめる ↗"}</button>
-      ${state.hasHistory ? `<button class="btn" id="history-btn">過去の練習を見る</button>` : ""}
-    </div>
-  `;
-  const resumeBtn = document.getElementById("resume-btn");
-  if(resumeBtn){
-    resumeBtn.onclick = async () => {
-      const draft = await Storage.loadDraft();
-      if(!draft){ setState({ screen:"tips" }); return; }
-      setState({
-        screen:"practice", qIndex: draft.qIndex || 0, answers: draft.answers || [],
-        showExample:false
-      });
-    };
-  }
-  document.getElementById("start-btn").onclick = async () => {
-    await Storage.clearDraft();
-    setState({ screen:"tips", qIndex:0, answers:[], showExample:false });
+  // テスト用データ（実際は画面の入力値や音声録音データを利用）
+  const sampleSession = {
+    userId: "user_12345",
+    submissionId: "sub_" + new Date().getTime(), // 1回の送信を一意に識別するID
+    brand: "共通",
+    questions: [
+      { qNum: 1, questionId: "q1", text: "志望動機を教えてください", answer: "ブランドの世界観に共感したためです。" },
+      { qNum: 2, questionId: "q2", text: "接客で大切にしていることは何ですか？", answer: "お客様のニーズを察知して提案することです。" },
+      { qNum: 3, questionId: "q3", text: "これまでで一番満足された接客エピソードは？", answer: "提案したコーディネートを全身購入していただけたことです。" },
+      { qNum: 4, questionId: "q4", text: "当ブランドの服の魅力をどう伝えますか？", answer: "素材の上質さとシルエットの美しさを伝えます。" },
+      { qNum: 5, questionId: "q5", text: "今後のキャリアプランを教えてください", answer: "店長を経て、将来はバイヤーを目指したいです。" }
+    ]
   };
-  const historyBtn = document.getElementById("history-btn");
-  if(historyBtn) historyBtn.onclick = () => setState({ screen:"history" });
-}
 
-/* ------------------------- 面談のポイント ------------------------- */
-function renderTips(){
-  app.innerHTML = `
-    <h2>面談のポイント</h2>
-    ${DATA.interviewTips.map(t => `
-      <div class="tip-row">
-        <div class="tip-icon">${t.icon}</div>
-        <p class="tip-text">${t.text}</p>
-      </div>
-    `).join("")}
-    <div style="height:8px;"></div>
-    <button class="btn btn-primary" id="tips-next">わかった、練習をはじめる ↗</button>
-  `;
-  document.getElementById("tips-next").onclick = () => setState({ screen:"practice" });
-}
+  // ==========================================
+  // メインの一括処理フロー
+  // ==========================================
+  async function startPracticeProcess() {
+    const startBtn = document.getElementById('start-btn');
+    startBtn.disabled = true;
 
-/* ------------------------- 面談練習 ------------------------- */
-function currentAnswer(){ return state.answers[state.qIndex] || { text:"", audioDataUrl:null }; }
-
-function renderPractice(){
-  const q = DATA.questions[state.qIndex];
-  const total = DATA.questions.length;
-  const ans = currentAnswer();
-  const pct = Math.round(((state.qIndex + 1) / total) * 100);
-
-  let recordSectionHtml;
-  if(!SUPPORT.mediaRecorder){
-    recordSectionHtml = `<p class="muted">このブラウザでは録音機能は利用できません。</p>`;
-  } else if(state.recording){
-    recordSectionHtml = `
-      <button class="btn btn-recording" id="record-btn">⏹ 録音を停止する</button>
-      <p class="muted" style="margin:8px 0 0;">録音中…</p>
-    `;
-  } else if(ans.audioDataUrl){
-    recordSectionHtml = `
-      <audio controls src="${ans.audioDataUrl}"></audio>
-      <button class="btn" id="rerecord-btn" style="margin-top:8px; width:auto; padding:9px 16px;">🔄 録り直す</button>
-    `;
-  } else {
-    recordSectionHtml = `<button class="btn" id="record-btn" style="width:auto; padding:9px 16px;">🎤 録音する</button>`;
-  }
-
-  app.innerHTML = `
-    <div class="progress-wrap">
-      <div class="progress-label"><span>進捗</span><span>${state.qIndex+1} / ${total}</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;"></div></div>
-    </div>
-
-    <p class="q-text">${q.text}</p>
-    <p class="muted" style="margin-top:-8px; margin-bottom:14px;">ヒント: ${q.tip}</p>
-
-    <textarea id="answer-text" placeholder="ここに回答を入力してください">${ans.text || ""}</textarea>
-
-    <hr class="divider">
-
-    <p class="muted" style="margin:0 0 8px;">声に出しての練習(任意)</p>
-    <div class="record-section">${recordSectionHtml}</div>
-    <div id="input-error" class="error-banner" style="display:none;"></div>
-
-    <hr class="divider">
-
-    <button class="btn btn-ghost" id="toggle-example">${state.showExample ? "▲ 回答例を隠す" : "▼ 回答例を見る"}</button>
-    <div id="example-slot"></div>
-
-    <div style="height:18px;"></div>
-    <button class="btn btn-primary" id="next-btn">${state.qIndex === total-1 ? "終了して振り返りを見る" : "次の質問へ"}</button>
-  `;
-
-  const textarea = document.getElementById("answer-text");
-  textarea.addEventListener("input", debounce(() => {
-    const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
-    state.answers[state.qIndex] = { ...current, text: textarea.value };
-    saveDraft();
-  }, 500));
-
-  if(SUPPORT.mediaRecorder){
-    const recordBtn = document.getElementById("record-btn");
-    if(recordBtn) recordBtn.onclick = toggleRecording;
-    const rerecordBtn = document.getElementById("rerecord-btn");
-    if(rerecordBtn) rerecordBtn.onclick = reRecord;
-  }
-
-  if(state.showExample){
-    document.getElementById("example-slot").innerHTML = `
-      <div class="example-box"><p>${q.answerExample}</p></div>
-    `;
-  }
-
-  document.getElementById("toggle-example").onclick = () => setState({ showExample: !state.showExample });
-  document.getElementById("next-btn").onclick = onNext;
-}
-
-function pickMimeType(){
-  if(!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
-  for(const c of candidates){
-    if(MediaRecorder.isTypeSupported(c)) return c;
-  }
-  return "";
-}
-
-let activeRecorder = null;
-
-function toggleRecording(){
-  if(state.recording){
-    if(activeRecorder){ try{ activeRecorder.stop(); }catch(e){} }
-    return;
-  }
-  clearInputError();
-  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
-    let recorder;
-    try{
-      const mimeType = pickMimeType();
-      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-    }catch(err){
-      console.error(err);
-      stream.getTracks().forEach(t => t.stop());
-      showInputError(`このブラウザでは録音を開始できませんでした(${err.name || "エラー"})。`);
+    // STEP 1: まず最初に回答データ全体をスプレッドシートへ高速保存 (Geminiは呼ばない)
+    try {
+      await saveAllAnswersInitial();
+    } catch (err) {
+      alert("回答データの保存に失敗しました。通信環境を確認してください: " + err.message);
+      startBtn.disabled = false;
       return;
     }
-    const chunks = [];
-    recorder.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
 
-    recorder.onerror = (e) => {
-      console.error("MediaRecorder error", e.error);
-      stream.getTracks().forEach(t => t.stop());
-      activeRecorder = null;
-      setState({ recording:false });
-      showInputError(`録音中にエラーが発生しました(${e.error && e.error.name ? e.error.name : "不明なエラー"})。もう一度お試しください。`);
-    };
+    // STEP 2: 1問ずつGemini APIを呼び出してフィードバックを取得・リアルタイム表示
+    for (let i = 0; i < sampleSession.questions.length; i++) {
+      const qData = sampleSession.questions[i];
+      const qNum = qData.qNum;
 
-    recorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      activeRecorder = null;
-      try{
-        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        if(blob.size === 0) throw new Error("empty-recording");
-        const audioDataUrl = await blobToDataURL(blob);
-        const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
-        state.answers[state.qIndex] = { ...current, audioDataUrl };
-        saveDraft();
-        setState({ recording:false });
-      }catch(e){
-        console.error(e);
-        setState({ recording:false });
-        showInputError("録音の保存に失敗しました。もう一度お試しください。");
+      // すでに完了済みのカードはスキップ（再送信時などのケア）
+      const card = document.getElementById(`question-card-${qNum}`);
+      if (card && card.classList.contains('status-success')) {
+        continue;
       }
+
+      // 1問分の処理を実行
+      await processSingleQuestion(qData, i);
+
+      // 最後の質問でなければ、Gemini APIのレート制限回避のため15秒間待機
+      if (i < sampleSession.questions.length - 1) {
+        updateUIStatus(qNum, 'waiting', '待機中', '制限回避のため15秒待機しています...');
+        await new Promise(resolve => setTimeout(resolve, 15000));
+      }
+    }
+
+    startBtn.disabled = false;
+  }
+
+  // ==========================================
+  // STEP 1: 回答保存用 (action未指定)
+  // ==========================================
+  async function saveAllAnswersInitial() {
+    const payload = {
+      id: sampleSession.userId,
+      submissionId: sampleSession.submissionId,
+      submittedAt: new Date().toISOString(),
+      answers: sampleSession.questions.map(q => ({
+        questionId: q.questionId,
+        text: q.answer,
+        audioDataUrl: q.audioDataUrl || ""
+      }))
     };
 
-    recorder.start();
-    activeRecorder = recorder;
-    setState({ recording:true });
-  }).catch(err => {
-    console.error(err);
-    showInputError(`マイクを使用できませんでした(${err.name || "エラー"})。ブラウザの設定でマイクの利用を許可してください。`);
-  });
-}
-
-function reRecord(){
-  const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
-  state.answers[state.qIndex] = { ...current, audioDataUrl: null };
-  saveDraft();
-  setState({});
-}
-
-function flushTextIfNeeded(){
-  const ta = document.getElementById("answer-text");
-  if(ta){
-    const current = state.answers[state.qIndex] || { text:"", audioDataUrl:null };
-    state.answers[state.qIndex] = { ...current, text: ta.value };
-    saveDraft();
-  }
-}
-
-function saveDraft(){
-  Storage.saveDraft({ qIndex: state.qIndex, answers: state.answers, updatedAt: new Date().toISOString() });
-}
-
-function showInputError(msg){
-  const el = document.getElementById("input-error");
-  if(el){ el.textContent = msg; el.style.display = "block"; }
-}
-function clearInputError(){
-  const el = document.getElementById("input-error");
-  if(el){ el.style.display = "none"; el.textContent = ""; }
-}
-
-function onNext(){
-  flushTextIfNeeded();
-  const total = DATA.questions.length;
-  if(state.qIndex === total - 1){
-    finishAndSave();
-  } else {
-    setState({ qIndex: state.qIndex + 1, showExample:false });
-    saveDraft();
-  }
-}
-
-/* 練習終了時:完了済みセッションとして保存し、下書きは削除する */
-async function finishAndSave(){
-  const session = {
-    id: "sess_" + Date.now(),
-    createdAt: new Date().toISOString(),
-    answers: DATA.questions.map((q, i) => {
-      const a = state.answers[i] || {};
-      return {
-        questionId: q.id,
-        questionText: q.text,
-        text: a.text || null,
-        audioDataUrl: a.audioDataUrl || null
-      };
-    }),
-    aiFeedback: null
-  };
-
-  const shouldSubmit = SESSION_ID_FROM_URL && !!CONFIG.gasWebAppUrl;
-
-  if(shouldSubmit){
-    const cloudStatus = await runCloudFlow(session);
-    const saved = await Storage.save(session);
-    await Storage.clearDraft();
-    await refreshFlags();
-    setState({ screen:"review", lastSavedNotice: saved, cloudStatus, reviewSession: session, feedbackProgress: null });
-  } else {
-    const saved = await Storage.save(session);
-    await Storage.clearDraft();
-    await refreshFlags();
-    setState({ screen:"review", lastSavedNotice: saved, cloudStatus:"idle", reviewSession: session });
-  }
-}
-
-/* ------------------------- クラウド処理と進捗表示 ------------------------- */
-
-async function runCloudFlow(session){
-  const progress = session.answers.map(a => ({ questionId: a.questionId, status: "pending" }));
-  setState({ screen:"finishing", feedbackProgress: progress });
-
-  try{
-    await saveAnswersToCloud(session);
-  }catch(err){
-    console.error("saveAnswersToCloud failed", err);
-    return "error"; 
-  }
-
-  const perQuestion = {};
-  let anySuccess = false;
-
- // 1問ずつ順番(直列)に処理する
-  for (let idx = 0; idx < session.answers.length; idx++) {
-    
-    // ★修正：待機時間を5000(5秒)から20000(20秒)に増やす
-    if (idx > 0) {
-      console.log(`[Q${idx + 1}] API制限回避のため15秒待機します...`);
-      await new Promise(resolve => setTimeout(resolve, 20000));
-    }
-
-    const a = session.answers[idx];
-    try {
-      const feedback = await requestFeedbackForOneQuestion(session, a, idx);
-      progress[idx] = { questionId: a.questionId, status: "done" };
-      setState({ feedbackProgress: [...progress] });
-      perQuestion[a.questionId] = feedback;
-      anySuccess = true;
-    } catch(err) {
-      console.error(`[Q${idx + 1}] ❌ エラー発生`);
-      console.error(`  - 詳細メッセージ: ${err.message}`);
-      
-      progress[idx] = { 
-        questionId: a.questionId, 
-        status: "error", 
-        category: err.category,
-        httpStatus: err.httpStatus
-      };
-      setState({ feedbackProgress: [...progress] });
-    }
-  }
-
-  session.aiFeedback = { perQuestion };
-  return anySuccess ? "success" : "error";
-}
-
-function renderFinishing(){
-  const progress = state.feedbackProgress || [];
-  app.innerHTML = `
-    <div class="accent-bar"></div>
-    <div class="logo-mark">👗</div>
-    <h1>アパレル面談練習</h1>
-    <p class="muted center">🤖 AIが回答を確認しています…</p>
-    ${progress.length ? `
-      <div class="progress-checklist">
-        ${progress.map((p,i) => `
-          <div class="progress-checklist-row">
-            <span class="progress-checklist-icon">${progressIcon(p.status)}</span>
-            <span>質問${i+1}</span>
-            <span class="muted progress-checklist-status">${progressLabel(p)}</span>
-          </div>
-        `).join("")}
-      </div>
-    ` : ""}
-  `;
-}
-
-function progressIcon(status){
-  if(status === "done") return "✅";
-  if(status === "error") return "⚠️";
-  return "⏳";
-}
-
-function progressLabel(p){
-  if(p.status === "done") return "完了";
-  if(p.status === "error") {
-    let msg = "失敗: ";
-    switch(p.category) {
-      case "rate_limit": msg += "API制限(アクセス過多)"; break;
-      case "timeout": msg += "タイムアウト"; break;
-      case "content_blocked": msg += "ブロックされました"; break;
-      case "gemini_server_error": msg += "AIサーバー障害"; break;
-      case "network_error": msg += "通信エラー"; break;
-      default: msg += "システムエラー";
-    }
-    // HTTPステータスがあれば画面にも併記する
-    if(p.httpStatus) msg += ` (HTTP ${p.httpStatus})`;
-    return msg;
-  }
-  return "確認中…";
-}
-
-/* ------------------------- 振り返り ------------------------- */
-function renderReview(){
-  const session = state.reviewSession;
-  const showCloudBanner = state.cloudStatus !== "idle";
-
-  let cloudStatusHtml = "";
-  if(state.cloudStatus === "success"){
-    cloudStatusHtml = `<div class="note-box">✓ 担当者に送信しました。面談準備のサポートを目的として、担当者がこの内容を確認する場合があります。</div>`;
-  } else if(state.cloudStatus === "error"){
-    cloudStatusHtml = `<div class="warn-box">担当者への送信、またはAIフィードバックの取得に失敗しました。通信状況をご確認のうえ、<a href="#" id="retry-submit-link">もう一度試す</a>をお試しください。</div>`;
-  }
-
-  app.innerHTML = `
-    <h2>今日の練習 🎉</h2>
-    <p class="muted center" style="margin-top:-10px;">全 ${DATA.questions.length} 問・お疲れ様でした</p>
-    ${state.lastSavedNotice
-      ? `<div class="note-box">${getSavedConfirmationText()}</div>`
-      : `<div class="warn-box">保存に失敗しました(このセッション内でのみ確認できます)。</div>`}
-    ${showCloudBanner ? cloudStatusHtml : ""}
-    ${session.answers.map((a,i) => renderAnswerCard(i+1, a, session.aiFeedback)).join("")}
-    <div style="height:6px;"></div>
-    <div class="stack">
-      <button class="btn btn-primary" id="restart-btn">もう一度練習する</button>
-      <button class="btn" id="top-btn">トップ画面に戻る</button>
-    </div>
-  `;
-  const retryLink = document.getElementById("retry-submit-link");
-  if(retryLink){
-    retryLink.onclick = async (e) => {
-      e.preventDefault();
-      const cloudStatus = await runCloudFlow(session);
-      await Storage.updateSession(session);
-      setState({ screen:"review", cloudStatus, reviewSession: session, feedbackProgress: null });
-    };
-  }
-  document.getElementById("restart-btn").onclick = () => setState({
-    screen:"top", qIndex:0, answers:[], showExample:false, lastSavedNotice:false, cloudStatus:"idle", reviewSession:null
-  });
-  document.getElementById("top-btn").onclick = () => setState({ screen:"top", lastSavedNotice:false, cloudStatus:"idle", reviewSession:null });
-}
-
-function renderAnswerCard(number, a, aiFeedback){
-  let body = "";
-  if(a.text && a.text.trim()) body += `<p class="answer-text">${a.text}</p>`;
-  if(a.audioDataUrl) body += `<audio controls src="${a.audioDataUrl}" style="margin-top:${a.text ? '8px' : '0'};"></audio>`;
-  if(!body) body = `<p class="answer-text muted">(未回答)</p>`;
-
-  const fb = aiFeedback && aiFeedback.perQuestion ? aiFeedback.perQuestion[a.questionId] : null;
-  let fbHtml = "";
-  if(fb){
-    const good = (fb.goodPoints || []).map(p => `<li>${p}</li>`).join("");
-    const improve = (fb.improvementPoints || []).map(p => `<li>${p}</li>`).join("");
-    const etiquette = (fb.etiquetteNotes || []).map(p => `<li>${p}</li>`).join("");
-    const missing = (fb.missingElements || []).map(p => `<li>${p}</li>`).join("");
-    fbHtml = `
-      <div class="ai-feedback-box">
-        <p class="ai-feedback-title">🤖 AIからのフィードバック</p>
-        ${fb.transcript ? `<p class="ai-feedback-label">文字起こし</p><p class="ai-feedback-sample">${fb.transcript}</p>` : ""}
-        ${good ? `<p class="ai-feedback-label">良かった点</p><ul class="ai-feedback-list">${good}</ul>` : ""}
-        ${improve ? `<p class="ai-feedback-label">改善点</p><ul class="ai-feedback-list">${improve}</ul>` : ""}
-        ${etiquette ? `<p class="ai-feedback-label">面接マナー・言葉遣い</p><ul class="ai-feedback-list">${etiquette}</ul>` : ""}
-        ${fb.sampleAnswer ? `<p class="ai-feedback-label">回答例</p><p class="ai-feedback-sample">${fb.sampleAnswer}</p>` : ""}
-        ${missing ? `<p class="ai-feedback-label">さらに良くするために追加すると良い内容</p><ul class="ai-feedback-list">${missing}</ul>` : ""}
-      </div>
-    `;
-  }
-
-  return `<div class="q-card"><p class="q-label">${number}. ${a.questionText}</p>${body}${fbHtml}</div>`;
-}
-
-/* ------------------------- クラウドとの通信(GAS) ------------------------- */
-const SAVE_TIMEOUT_MS = 60000;
-const FEEDBACK_TIMEOUT_MS = 60000;
-
-async function saveAnswersToCloud(session){
-  const payload = {
-    id: SESSION_ID,
-    brand: BRAND_ID,
-    submissionId: session.id,
-    submittedAt: session.createdAt,
-    answers: session.answers.map(a => ({
-      questionId: a.questionId,
-      questionText: a.questionText,
-      text: a.text || "",
-      audioDataUrl: a.audioDataUrl || null
-    }))
-  };
-  const json = await postToGas(payload, SAVE_TIMEOUT_MS);
-  if(!json || json.status !== "ok"){
-    throw new Error((json && json.message) || "unknown error");
-  }
-  return json;
-}
-
-async function requestFeedbackForOneQuestion(session, answer, idx){
-  console.log(`[Q${idx + 1}] Gemini APIへ送信開始`);
-  const payload = {
-    id: SESSION_ID,
-    action: "generateFeedback",
-    submissionId: session.id,
-    brand: BRAND_ID,
-    questionIndex: idx,
-    question: {
-      questionId: answer.questionId,
-      questionText: answer.questionText,
-      text: answer.text || "",
-      audioDataUrl: answer.audioDataUrl || null
-    }
-  };
-  
-  let json;
-  try {
-    json = await postToGas(payload, FEEDBACK_TIMEOUT_MS);
-    console.log(`[Q${idx + 1}] APIレスポンス受信`);
-  } catch(err) {
-    err.stage = "network";
-    err.category = err.message === "timeout" ? "timeout" : "network_error";
-    throw err;
-  }
-
-  if(!json || json.status !== "ok"){
-    const err = new Error((json && json.message) || "unknown error");
-    if(json) {
-      err.stage = json.stage;
-      err.category = json.category;
-      err.httpStatus = json.httpStatus;
-      err.geminiMessage = json.geminiMessage;
-    }
-    throw err;
-  }
-  
-  console.log(`[Q${idx + 1}] AIフィードバック生成完了`);
-  console.log(`[Q${idx + 1}] スプレッド保存完了`);
-  
-  return json.feedback;
-}
-
-async function postToGas(payload, timeoutMs){
-  let res;
-  try{
-    res = await fetchWithTimeout(CONFIG.gasWebAppUrl, timeoutMs, {
+    const response = await fetch(GAS_WEBAPP_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(payload)
     });
-  }catch(err){
-    if(err.name === "AbortError") throw new Error("timeout");
-    throw err;
-  }
-  return res.json();
-}
 
-/* ------------------------- 過去の練習一覧 ------------------------- */
-async function renderHistory(){
-  const sessions = await Storage.list();
-  app.innerHTML = `
-    <h2>過去の練習</h2>
-    ${sessions.length === 0 ? `<p class="empty-state">まだ記録がありません</p>` : sessions.map(s => `
-      <div class="history-row">
-        <div>
-          <p class="history-date">${formatDate(s.createdAt)}</p>
-          <p class="history-meta">${countAnswered(s)} / ${DATA.questions.length} 問 回答</p>
-        </div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-          <button class="btn" data-id="${s.id}" style="width:auto; padding:7px 15px; min-height:auto;">見る</button>
-          <button class="btn-danger" data-del="${s.id}">削除</button>
-        </div>
-      </div>
-    `).join("")}
-    <div style="height:16px;"></div>
-    <button class="btn" id="back-btn">トップ画面に戻る</button>
-  `;
-  app.querySelectorAll("[data-id]").forEach(btn => {
-    btn.onclick = () => setState({ screen:"historyDetail", viewingSessionId: btn.dataset.id });
-  });
-  app.querySelectorAll("[data-del]").forEach(btn => {
-    btn.onclick = async () => {
-      if(confirm("この記録を削除しますか?")){
-        await Storage.remove(btn.dataset.del);
-        await refreshFlags();
-        render();
+    const result = await response.json();
+    if (result.status !== "ok") {
+      throw new Error(result.message || "保存に失敗しました");
+    }
+  }
+
+  // ==========================================
+  // STEP 2: 1問分のAIフィードバック処理
+  // ==========================================
+  async function processSingleQuestion(qData, questionIndex) {
+    const qNum = qData.qNum;
+    updateUIStatus(qNum, 'processing', 'AI分析中', 'Gemini APIでフィードバックを作成中...');
+
+    try {
+      // GASの handleGenerateFeedbackForQuestion に対応する形式で送信
+      const payload = {
+        action: "generateFeedback",
+        id: sampleSession.userId,
+        submissionId: sampleSession.submissionId,
+        brand: sampleSession.brand,
+        questionIndex: questionIndex, // 0始まりのインデックス
+        question: {
+          questionId: qData.questionId,
+          questionText: qData.text,
+          text: qData.answer,
+          audioDataUrl: qData.audioDataUrl || ""
+        }
+      };
+
+      const response = await fetch(GAS_WEBAPP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (result.status === "ok" && result.feedback) {
+        // 成功：即座に画面に結果を描画
+        renderFeedbackUI(qNum, result.feedback);
+        updateUIStatus(qNum, 'success', '完了', '完了しました');
+      } else {
+        throw new Error(result.message || 'AIフィードバックの生成に失敗しました');
       }
-    };
-  });
-  document.getElementById("back-btn").onclick = () => setState({ screen:"top" });
-}
 
-function formatDate(iso){
-  const d = new Date(iso);
-  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
-}
-function countAnswered(session){
-  return session.answers.filter(a => (a.text && a.text.trim()) || a.audioDataUrl).length;
-}
-
-/* ------------------------- 過去の練習の詳細 ------------------------- */
-async function renderHistoryDetail(){
-  const sessions = await Storage.list();
-  const session = sessions.find(s => s.id === state.viewingSessionId);
-  if(!session){
-    app.innerHTML = `<p class="empty-state">記録が見つかりませんでした</p><button class="btn" id="back-btn">一覧に戻る</button>`;
-    document.getElementById("back-btn").onclick = () => setState({ screen:"history" });
-    return;
+    } catch (error) {
+      console.error(`[Q${qNum}] エラー:`, error);
+      // エラー：再送信ボタンを表示して部分失敗に対応
+      renderErrorUI(qNum, error.message, qData, questionIndex);
+      updateUIStatus(qNum, 'error', 'エラー', '処理中にエラーが発生しました');
+    }
   }
-  app.innerHTML = `
-    <h2>練習の記録</h2>
-    <p class="muted center" style="margin-top:-10px; margin-bottom:16px;">${formatDate(session.createdAt)}</p>
-    ${session.answers.map((a,i) => renderAnswerCard(i+1, a, session.aiFeedback)).join("")}
-    <div style="height:6px;"></div>
-    <button class="btn" id="back-btn">一覧に戻る</button>
-  `;
-  document.getElementById("back-btn").onclick = () => setState({ screen:"history" });
-}
 
-/* =========================================================
-   起動
-========================================================= */
-function renderLoading(showRetryButton){
-  app.innerHTML = `
-    <div class="accent-bar"></div>
-    <div class="logo-mark">👗</div>
-    <h1>アパレル面談練習</h1>
-    <p class="muted center">質問を読み込んでいます…</p>
-    ${showRetryButton ? `
-      <p class="muted center" style="margin-top:8px;">通信に時間がかかっています</p>
-      <button class="btn btn-primary" id="retry-load-btn">再読み込み</button>
-    ` : ""}
-  `;
-  const btn = document.getElementById("retry-load-btn");
-  if(btn) btn.onclick = () => boot();
-}
-
-function renderLoadError(reason){
-  const messages = {
-    "gas-not-configured": "質問データの取得先が設定されていません。管理者にご確認ください。",
-    "no-questions": "この専用URLに対応する質問が見つかりませんでした。URLが正しいか、管理者にご確認ください。",
-    "timeout": "通信エラーが発生しました。もう一度お試しください。",
-    "network": "通信エラーが発生しました。もう一度お試しください。",
-    "invalid-response": "通信エラーが発生しました。もう一度お試しください。"
-  };
-  app.innerHTML = `
-    <div class="accent-bar"></div>
-    <div class="logo-mark">👗</div>
-    <h1>アパレル面談練習</h1>
-    <div class="warn-box">${messages[reason] || "通信エラーが発生しました。もう一度お試しください。"}</div>
-    <button class="btn btn-primary" id="retry-load-btn">もう一度読み込む</button>
-  `;
-  document.getElementById("retry-load-btn").onclick = () => boot();
-}
-
-async function boot(){
-  renderLoading(false);
-  await refreshFlags();
-
-  let settled = false;
-  const slowTimer = setTimeout(() => {
-    if(!settled) renderLoading(true);
-  }, 10000);
-
-  try{
-    DATA.questions = await loadQuestions();
-    settled = true;
-    clearTimeout(slowTimer);
-    render();
-  }catch(err){
-    settled = true;
-    clearTimeout(slowTimer);
-    console.error("質問の読み込みが最終的に失敗しました", err);
-    renderLoadError(err && err.message);
+  // 単体再送信関数
+  async function retrySingleQuestion(qData, questionIndex) {
+    const qNum = qData.qNum;
+    document.getElementById(`feedback-result-${qNum}`).style.display = 'none';
+    await processSingleQuestion(qData, questionIndex);
   }
-}
 
-boot();
+  // ==========================================
+  // UI制御ヘルパー関数群
+  // ==========================================
+  function updateUIStatus(qNum, statusClass, badgeText, statusText) {
+    const card = document.getElementById(`question-card-${qNum}`);
+    const badge = document.getElementById(`status-badge-${qNum}`);
+    const text = document.getElementById(`status-text-${qNum}`);
+
+    if (card) card.className = `question-card status-${statusClass}`;
+    if (badge) {
+      badge.className = `status-badge badge-${statusClass}`;
+      badge.textContent = badgeText;
+    }
+    if (text) text.textContent = statusText;
+  }
+
+  // GASから返ってくる構造化オブジェクト（JSON）をきれいに整形して表示
+  function renderFeedbackUI(qNum, f) {
+    const resultEl = document.getElementById(`feedback-result-${qNum}`);
+    if (!resultEl) return;
+
+    let html = `<div class="feedback-box"><h4>💡 AIフィードバック</h4>`;
+
+    if (f.transcript) {
+      html += `<div class="feedback-section"><strong>【文字起こし】</strong><p>${escapeHtml(f.transcript)}</p></div>`;
+    }
+    if (f.goodPoints && f.goodPoints.length) {
+      html += `<div class="feedback-section"><strong>【良かった点】</strong><ul>${f.goodPoints.map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ul></div>`;
+    }
+    if (f.improvementPoints && f.improvementPoints.length) {
+      html += `<div class="feedback-section"><strong>【改善点】</strong><ul>${f.improvementPoints.map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ul></div>`;
+    }
+    if (f.etiquetteNotes && f.etiquetteNotes.length) {
+      html += `<div class="feedback-section"><strong>【面接マナー・言葉遣い】</strong><ul>${f.etiquetteNotes.map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ul></div>`;
+    }
+    if (f.sampleAnswer) {
+      html += `<div class="feedback-section"><strong>【回答例】</strong><p style="white-space: pre-wrap;">${escapeHtml(f.sampleAnswer)}</p></div>`;
+    }
+    if (f.missingElements && f.missingElements.length) {
+      html += `<div class="feedback-section"><strong>【追加するとさらに良くなる要素】</strong><ul>${f.missingElements.map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ul></div>`;
+    }
+
+    html += `</div>`;
+    resultEl.innerHTML = html;
+    resultEl.style.display = 'block';
+  }
+
+  function renderErrorUI(qNum, errorMessage, qData, questionIndex) {
+    const resultEl = document.getElementById(`feedback-result-${qNum}`);
+    if (!resultEl) return;
+
+    const qDataJson = JSON.stringify(qData).replace(/"/g, '&quot;');
+
+    resultEl.innerHTML = `
+      <div class="error-box">
+        <p style="color: #ff4d4f; margin: 0 0 8px 0; font-weight: bold;">
+          ⚠️ 送信失敗: ${escapeHtml(errorMessage)}
+        </p>
+        <button type="button" class="btn-retry" onclick="retrySingleQuestion(${qDataJson}, ${questionIndex})">
+          🔄 この質問だけもう一度送信する
+        </button>
+      </div>
+    `;
+    resultEl.style.display = 'block';
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 </script>
+
 </body>
 </html>
