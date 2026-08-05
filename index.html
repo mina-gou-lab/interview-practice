@@ -342,14 +342,29 @@ async function loadQuestions(onAttempt){
 const SESSIONS_KEY = `apparel_interview_sessions_v1__${SESSION_ID}`;
 const DRAFT_KEY = `apparel_interview_draft_v1__${SESSION_ID}`;
 const MAX_SESSIONS = 8;
+const MAX_SESSION_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30日(約1ヶ月)を過ぎた記録は自動的に取り除く
 
 const Storage = {
   async list(){
     if(!SUPPORT.localStorage) return [];
     try{
       const raw = localStorage.getItem(SESSIONS_KEY);
-      return raw ? JSON.parse(raw) : [];
+      const sessions = raw ? JSON.parse(raw) : [];
+      return await Storage._pruneOldSessions(sessions);
     }catch(e){ console.error("Storage.list failed", e); return []; }
+  },
+  // 30日より古い記録を取り除く。取り除いた場合は保存し直す(次回以降は読み込むだけで済む)。
+  async _pruneOldSessions(sessions){
+    const now = Date.now();
+    const fresh = sessions.filter(s => {
+      const createdMs = new Date(s.createdAt).getTime();
+      return isNaN(createdMs) || (now - createdMs) <= MAX_SESSION_AGE_MS;
+    });
+    if(fresh.length !== sessions.length){
+      try{ localStorage.setItem(SESSIONS_KEY, JSON.stringify(fresh)); }
+      catch(e){ console.error("Storage._pruneOldSessions save failed", e); }
+    }
+    return fresh;
   },
   async save(session){
     if(!SUPPORT.localStorage) return false;
