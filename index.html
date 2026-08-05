@@ -771,11 +771,24 @@ async function requestFeedbackForOneQuestionWithRetry(session, answer, idx){
       lastErr = err;
       console.error(`質問${idx + 1}(${answer.questionId}) 試行${attempt}/${FEEDBACK_RETRY_COUNT + 1}失敗 [段階:${err.stage || "不明"} / 分類:${err.category || "不明"}]`, err);
       if(attempt <= FEEDBACK_RETRY_COUNT){
-        await new Promise(r => setTimeout(r, 1000 * attempt)); // 少し間隔をあけて再試行
+        const waitMs = computeRetryWaitMs(err, attempt);
+        console.log(`質問${idx + 1}(${answer.questionId}) ${(waitMs/1000).toFixed(1)}秒待ってから再試行します`);
+        await new Promise(r => setTimeout(r, waitMs));
       }
     }
   }
   throw lastErr;
+}
+
+/* 利用制限(rate_limit)エラーのときは、短い間隔で再試行しても無駄になりやすいため、
+   Geminiが教えてくれた待ち時間(retryAfterSeconds)、なければ余裕を見て20秒待つ。
+   それ以外のエラーは、これまで通り短い間隔で再試行する。 */
+function computeRetryWaitMs(err, attempt){
+  if(err.category === "rate_limit"){
+    const suggested = err.retryAfterSeconds ? err.retryAfterSeconds * 1000 : 20000;
+    return Math.max(suggested, 15000);
+  }
+  return 1000 * attempt;
 }
 
 /* タスク(関数の配列)を、同時にlimit件までしか実行しないようにして順番に処理する */
@@ -1010,6 +1023,7 @@ async function requestFeedbackForOneQuestion(session, answer, idx){
     err.stage = (json && json.stage) || "unknown";
     err.httpStatus = json && json.httpStatus;
     err.geminiMessage = json && json.geminiMessage;
+    err.retryAfterSeconds = json && json.retryAfterSeconds;
     throw err;
   }
   return json.feedback;
