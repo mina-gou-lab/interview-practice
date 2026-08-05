@@ -178,10 +178,15 @@ const DATA = {
    GAS送信機能により実際に担当者が回答を確認できるようになったため true。
    gasWebAppUrl: Google Apps ScriptをWebアプリとして公開したときのURL。
    ここが空欄の間は「送信」機能は表示されない(ローカル保存のみで動作する)。
+   aiFeedbackEnabled: AIフィードバック機能のオン/オフ。
+   falseにすると、回答の保存(スプレッドシートへの反映)は今まで通り行われるが、
+   Gemini APIは一切呼ばれなくなる(無料枠の制限などで不安定なときに、
+   このスイッチだけ切り替えれば、コードを削除せずに機能を一時停止できる)。
 ========================================================= */
 const CONFIG = {
   cloudEnabled: true,
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec"
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec", 
+  aiFeedbackEnabled: false
 };
 
 function getPrivacyNoticeText(){
@@ -727,6 +732,18 @@ const FEEDBACK_CONCURRENCY_LIMIT = 2; // 同時に送るリクエスト数(録�
 const FEEDBACK_RETRY_COUNT = 2;       // 1回失敗しても、追加でこの回数まで自動再試行する(実質最大3回挑戦)
 
 async function runCloudFlow(session){
+  if(!CONFIG.aiFeedbackEnabled){
+    // AIフィードバックは一時停止中。回答の保存(スプレッドシートへの反映)だけ行う。
+    setState({ screen:"finishing", feedbackProgress: null });
+    try{
+      await saveAnswersToCloud(session);
+      return "success";
+    }catch(err){
+      console.error("saveAnswersToCloud failed", err);
+      return "error";
+    }
+  }
+
   const progress = session.answers.map(a => ({ questionId: a.questionId, status: "pending" }));
   setState({ screen:"finishing", feedbackProgress: progress });
 
@@ -840,7 +857,7 @@ function renderFinishing(){
     <div class="accent-bar"></div>
     <div class="logo-mark">👗</div>
     <h1>アパレル面談練習</h1>
-    <p class="muted center">🤖 AIが回答を確認しています…</p>
+    <p class="muted center">${CONFIG.aiFeedbackEnabled ? "🤖 AIが回答を確認しています…" : "回答を送信しています…"}</p>
     ${progress.length ? `
       <div class="progress-checklist">
         ${progress.map((p,i) => `
@@ -875,7 +892,10 @@ function renderReview(){
   if(state.cloudStatus === "success"){
     cloudStatusHtml = `<div class="note-box">✓ 担当者に送信しました。面談準備のサポートを目的として、担当者がこの内容を確認する場合があります。</div>`;
   } else if(state.cloudStatus === "error"){
-    cloudStatusHtml = `<div class="warn-box">担当者への送信、またはAIフィードバックの取得に失敗しました。通信状況をご確認のうえ、<a href="#" id="retry-submit-link">もう一度試す</a>をお試しください。</div>`;
+    const failMessage = CONFIG.aiFeedbackEnabled
+      ? "担当者への送信、またはAIフィードバックの取得に失敗しました。"
+      : "担当者への送信に失敗しました。";
+    cloudStatusHtml = `<div class="warn-box">${failMessage}通信状況をご確認のうえ、<a href="#" id="retry-submit-link">もう一度試す</a>をお試しください。</div>`;
   }
 
   app.innerHTML = `
