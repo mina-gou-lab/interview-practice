@@ -182,11 +182,15 @@ const DATA = {
    falseにすると、回答の保存(スプレッドシートへの反映)は今まで通り行われるが、
    Gemini APIは一切呼ばれなくなる(無料枠の制限などで不安定なときに、
    このスイッチだけ切り替えれば、コードを削除せずに機能を一時停止できる)。
+   transcriptionEnabled: 録音した回答の文字起こしのオン/オフ。
+   aiFeedbackEnabledがfalseのときだけ使われる(trueのときはフィードバックの中に
+   文字起こしも含めて生成するため、こちらは呼ばれない)。
 ========================================================= */
 const CONFIG = {
   cloudEnabled: true,
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec", 
-  aiFeedbackEnabled: false
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbwbpsBvkCgjFdgeLQ7_LSv-z8Y1aAJMo7X8wacYhcUZX82ZGSiuUnfyzQ1sL3KhCZXj/exec",
+  aiFeedbackEnabled: false,
+  transcriptionEnabled: true
 };
 
 function getPrivacyNoticeText(){
@@ -733,15 +737,30 @@ const FEEDBACK_RETRY_COUNT = 2;       // 1回失敗しても、追加でこの�
 
 async function runCloudFlow(session){
   if(!CONFIG.aiFeedbackEnabled){
-    // AIフィードバックは一時停止中。回答の保存(スプレッドシートへの反映)だけ行う。
-    setState({ screen:"finishing", feedbackProgress: null });
+    // AIフィードバックは一時停止中。回答の保存は今まで通り行う。
+    const hasAudio = session.answers.some(a => a.audioDataUrl);
+    const willTranscribe = CONFIG.transcriptionEnabled && hasAudio;
+    const progress = willTranscribe
+      ? session.answers.map(a => ({ questionId: a.questionId, status: a.audioDataUrl ? "pending" : "done" }))
+      : null;
+    setState({ screen:"finishing", feedbackProgress: progress });
+
     try{
       await saveAnswersToCloud(session);
-      return "success";
     }catch(err){
       console.error("saveAnswersToCloud failed", err);
       return "error";
     }
+
+    if(!willTranscribe){
+      return "success";
+    }
+
+    const tasks = session.answers.map((a, idx) => () => runTranscriptionTask(session, a, idx, progress));
+    const results = await runWithConcurrencyLimit(tasks, FEEDBACK_CONCURRENCY_LIMIT);
+    applyTranscriptResults(session, results);
+    const anyAudioFailed = results.some(r => !r.ok);
+    return anyAudioFailed ? "error" : "success";
   }
 
   const progress = session.answers.map(a => ({ questionId: a.questionId, status: "pending" }));
@@ -760,6 +779,93 @@ async function runCloudFlow(session){
   applyFeedbackResults(session, results);
   const anySuccess = results.some(r => r.ok);
   return anySuccess ? "success" : "error";
+}
+
+/* 1問分の文字起こしを、リトライも含めて取得する(進捗表示の更新もここで行う)。
+   テキスト回答の場合は文字起こし不要なので、すぐ完了扱いにする。 */
+async function runTranscriptionTask(session, answer, idx, progress){
+  if(!answer.audioDataUrl){
+    return { questionId: answer.questionId, ok: true, transcript: "" };
+  }
+  try{
+    const transcript = await requestTranscriptionForOneQuestionWithRetry(session, answer, idx);
+    if(progress){ progress[idx] = { questionId: answer.questionId, status: "done" }; setState({ feedbackProgress: [...progress] }); }
+    return { questionId: answer.questionId, ok: true, transcript };
+  }catch(err){
+    console.error(`質問${idx + 1}(${answer.questionId})の文字起こしに失敗(リトライ含め全て失敗) [分類:${err.category || "不明"}]`, err);
+    if(progress){ progress[idx] = { questionId: answer.questionId, status: "error", category: err.category || "unknown", stage: err.stage || "unknown" }; setState({ feedbackProgress: [...progress] }); }
+    return {
+      questionId: answer.questionId, ok: false, transcript: null,
+      errorInfo: { category: err.category || "unknown", stage: err.stage || "unknown", message: err.message }
+    };
+  }
+}
+
+async function requestTranscriptionForOneQuestionWithRetry(session, answer, idx){
+  let lastErr;
+  for(let attempt = 1; attempt <= FEEDBACK_RETRY_COUNT + 1; attempt++){
+    try{
+      return await requestTranscriptionForOneQuestion(session, answer, idx);
+    }catch(err){
+      lastErr = err;
+      console.error(`質問${idx + 1}(${answer.questionId}) 文字起こし 試行${attempt}/${FEEDBACK_RETRY_COUNT + 1}失敗 [分類:${err.category || "不明"}]`, err);
+      if(attempt <= FEEDBACK_RETRY_COUNT){
+        const waitMs = computeRetryWaitMs(err, attempt);
+        await new Promise(r => setTimeout(r, waitMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+async function requestTranscriptionForOneQuestion(session, answer, idx){
+  const payload = {
+    id: SESSION_ID,
+    action: "transcribe",
+    submissionId: session.id,
+    brand: BRAND_ID,
+    questionIndex: idx,
+    question: {
+      questionId: answer.questionId,
+      questionText: answer.questionText,
+      text: answer.text || "",
+      audioDataUrl: answer.audioDataUrl || null
+    }
+  };
+  let json;
+  try{
+    json = await postToGas(payload, FEEDBACK_TIMEOUT_MS);
+  }catch(err){
+    const wrapped = new Error(err.message === "timeout" ? "通信がタイムアウトしました" : (err.message || "通信エラー"));
+    wrapped.category = err.message === "timeout" ? "timeout" : "network";
+    wrapped.stage = "network";
+    throw wrapped;
+  }
+  if(!json || json.status !== "ok"){
+    const err = new Error((json && json.message) || "unknown error");
+    err.category = (json && json.category) || "unknown";
+    err.stage = (json && json.stage) || "unknown";
+    err.httpStatus = json && json.httpStatus;
+    err.geminiMessage = json && json.geminiMessage;
+    err.retryAfterSeconds = json && json.retryAfterSeconds;
+    throw err;
+  }
+  return json.transcript || "";
+}
+
+/* 文字起こしの結果をsessionに反映する(振り返り画面・過去の記録どちらでも共通で使う) */
+function applyTranscriptResults(session, results){
+  const perQuestion = (session.aiFeedback && session.aiFeedback.perQuestion) || {};
+  const errors = (session.aiFeedback && session.aiFeedback.errors) || {};
+  results.forEach(r => {
+    if(r.ok){
+      if(r.transcript){ perQuestion[r.questionId] = { transcript: r.transcript }; }
+      delete errors[r.questionId];
+    } else {
+      errors[r.questionId] = r.errorInfo;
+    }
+  });
+  session.aiFeedback = { perQuestion, errors };
 }
 
 /* 1問分のAIフィードバックを、リトライも含めて取得する(進捗表示の更新もここで行う) */
@@ -857,7 +963,7 @@ function renderFinishing(){
     <div class="accent-bar"></div>
     <div class="logo-mark">👗</div>
     <h1>アパレル面談練習</h1>
-    <p class="muted center">${CONFIG.aiFeedbackEnabled ? "🤖 AIが回答を確認しています…" : "回答を送信しています…"}</p>
+    <p class="muted center">${CONFIG.aiFeedbackEnabled ? "🤖 AIが回答を確認しています…" : (CONFIG.transcriptionEnabled ? "📝 音声を文字起こししています…" : "回答を送信しています…")}</p>
     ${progress.length ? `
       <div class="progress-checklist">
         ${progress.map((p,i) => `
@@ -894,7 +1000,7 @@ function renderReview(){
   } else if(state.cloudStatus === "error"){
     const failMessage = CONFIG.aiFeedbackEnabled
       ? "担当者への送信、またはAIフィードバックの取得に失敗しました。"
-      : "担当者への送信に失敗しました。";
+      : (CONFIG.transcriptionEnabled ? "担当者への送信、または文字起こしに失敗しました。" : "担当者への送信に失敗しました。");
     cloudStatusHtml = `<div class="warn-box">${failMessage}通信状況をご確認のうえ、<a href="#" id="retry-submit-link">もう一度試す</a>をお試しください。</div>`;
   }
 
@@ -937,8 +1043,13 @@ function bindRegenerateButtons(session, onDone){
       btn.disabled = true;
       btn.textContent = "生成中…";
       const answer = session.answers[idx];
-      const result = await runOneFeedbackTask(session, answer, idx, null);
-      applyFeedbackResults(session, [result]);
+      if(CONFIG.aiFeedbackEnabled){
+        const result = await runOneFeedbackTask(session, answer, idx, null);
+        applyFeedbackResults(session, [result]);
+      } else if(CONFIG.transcriptionEnabled){
+        const result = await runTranscriptionTask(session, answer, idx, null);
+        applyTranscriptResults(session, [result]);
+      }
       await Storage.updateSession(session);
       onDone();
     };
@@ -957,14 +1068,15 @@ function renderAnswerCard(number, a, aiFeedback){
   const errorInfo = aiFeedback && aiFeedback.errors ? aiFeedback.errors[a.questionId] : null;
   let fbHtml = "";
   if(fb){
+    const isTranscriptOnly = !fb.goodPoints && !fb.improvementPoints && !fb.etiquetteNotes && !fb.sampleAnswer && !fb.missingElements;
     const good = (fb.goodPoints || []).map(p => `<li>${p}</li>`).join("");
     const improve = (fb.improvementPoints || []).map(p => `<li>${p}</li>`).join("");
     const etiquette = (fb.etiquetteNotes || []).map(p => `<li>${p}</li>`).join("");
     const missing = (fb.missingElements || []).map(p => `<li>${p}</li>`).join("");
     fbHtml = `
       <div class="ai-feedback-box">
-        <p class="ai-feedback-title">🤖 AIからのフィードバック</p>
-        ${fb.transcript ? `<p class="ai-feedback-label">文字起こし</p><p class="ai-feedback-sample">${fb.transcript}</p>` : ""}
+        <p class="ai-feedback-title">${isTranscriptOnly ? "📝 文字起こし" : "🤖 AIからのフィードバック"}</p>
+        ${fb.transcript ? (isTranscriptOnly ? `<p class="ai-feedback-sample">${fb.transcript}</p>` : `<p class="ai-feedback-label">文字起こし</p><p class="ai-feedback-sample">${fb.transcript}</p>`) : ""}
         ${good ? `<p class="ai-feedback-label">良かった点</p><ul class="ai-feedback-list">${good}</ul>` : ""}
         ${improve ? `<p class="ai-feedback-label">改善点</p><ul class="ai-feedback-list">${improve}</ul>` : ""}
         ${etiquette ? `<p class="ai-feedback-label">面接マナー・言葉遣い</p><ul class="ai-feedback-list">${etiquette}</ul>` : ""}
@@ -975,7 +1087,7 @@ function renderAnswerCard(number, a, aiFeedback){
   } else if(errorInfo){
     fbHtml = `
       <div class="ai-feedback-box ai-feedback-error">
-        <p class="ai-feedback-title">🤖 AIからのフィードバック</p>
+        <p class="ai-feedback-title">${CONFIG.aiFeedbackEnabled ? "🤖 AIからのフィードバック" : "📝 文字起こし"}</p>
         <p class="muted" style="margin:0 0 8px;">取得できませんでした(${errorCategoryLabel(errorInfo.category)})</p>
         <button class="btn" data-regenerate-idx="${number - 1}" style="width:auto; padding:6px 14px;">🔄 この質問だけ再生成する</button>
       </div>
